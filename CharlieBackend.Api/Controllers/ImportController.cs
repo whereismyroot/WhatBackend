@@ -95,16 +95,7 @@ namespace CharlieBackend.Api.Controllers
         [HttpPost]
         public async Task<ActionResult> ImportThemeDataFromFile(IFormFile file)
         {
-            var listOfImportedThemes = new Result<List<ThemeFile>>();
-
-            if (_themeImportService.CheckIfExcelFile(file))
-            {
-                listOfImportedThemes = await _themeImportService.ImportFileAsync(file);
-            }
-            else
-            {
-                return BadRequest(new { message = "Invalid file extension" });
-            }
+            var listOfImportedThemes = await _themeImportService.ImportFileAsync(file);
 
             return listOfImportedThemes.ToActionResult();
         }

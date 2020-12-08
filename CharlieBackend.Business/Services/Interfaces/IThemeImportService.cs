@@ -9,7 +9,5 @@ namespace CharlieBackend.Business.Services.Interfaces
     public interface IThemeImportService
     {
         Task<Result<List<ThemeFile>>> ImportFileAsync(IFormFile uploadedFile);
-
-        bool CheckIfExcelFile(IFormFile file);
     }
 }

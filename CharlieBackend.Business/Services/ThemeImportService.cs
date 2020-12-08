@@ -12,6 +12,7 @@ using CharlieBackend.Core.FileModels;
 using CharlieBackend.Core.Models.ResultModel;
 using CharlieBackend.Business.Services.Interfaces;
 using CharlieBackend.Data.Repositories.Impl.Interfaces;
+using OfficeOpenXml;
 
 namespace CharlieBackend.Business.Services
 {
@@ -28,67 +29,47 @@ namespace CharlieBackend.Business.Services
 
         public async Task<Result<List<ThemeFile>>> ImportFileAsync(IFormFile uploadedFile)
         {
-            string path = "";
             List<ThemeFile> importedThemes = new List<ThemeFile>();
 
-            if (uploadedFile != null)
+            try
             {
-                path = await CreateFile(uploadedFile);
-                var book = new XLWorkbook(path);
-                var themesSheet = book.Worksheet("Themes");
+                var themesSheet = (await ValidateFile(uploadedFile)).Worksheet("Themes");
 
-                char charPointer = 'A';
                 int rowCounter = 2;
-
-                var properties = typeof(ThemeFile).GetProperties();
-                foreach (PropertyInfo property in properties)
-                {
-                    if (property.Name != Convert.ToString(themesSheet.Cell($"{charPointer}1").Value))
-                    {
-                        return Result<List<ThemeFile>>.GetError(ErrorCode.ValidationError,
-                                    "The format of the downloaded file is not suitable."
-                                         + "Check headers in the file.");
-                    }
-                    charPointer++;
-                }
 
                 while (!IsEndOfFile(rowCounter, themesSheet))
                 {
-                    try
+                    ThemeFile fileLine = new ThemeFile
                     {
-                        ThemeFile fileLine = new ThemeFile
-                        {
-                            Theme = themesSheet.Cell($"A{rowCounter}").Value.ToString(),
-                        };
+                        ThemeName = themesSheet.Cell($"A{rowCounter}").Value.ToString(),
+                    };
 
-                        //await IsValueValid(fileLine, rowCounter);
+                    await IsValueValid(fileLine, rowCounter);
 
-                        Theme theme = new Theme
-                        {
-                            Name = fileLine.Theme,
-                        };
-
-                        importedThemes.Add(fileLine);
-                        _unitOfWork.ThemeRepository.Add(theme);
-                        rowCounter++;
-                    }
-                    catch (FormatException ex)
+                    Theme theme = new Theme
                     {
-                        _unitOfWork.Rollback();
+                        Name = fileLine.ThemeName,
+                    };
 
-                        return Result<List<ThemeFile>>.GetError(ErrorCode.ValidationError,
-                            "The format of the inputed data is incorrect.\n" + ex.Message);
-                    }
-                    catch (DbUpdateException ex)
-                    {
-                        _unitOfWork.Rollback();
-
-                        return Result<List<ThemeFile>>
-                            .GetError(ErrorCode.ValidationError,
-                                "Inputed data is incorrect.\n" + ex.Message);
-                    }
+                    importedThemes.Add(fileLine);
+                    _unitOfWork.ThemeRepository.Add(theme);
+                    rowCounter++;
                 }
             }
+            catch (FormatException ex)
+            {
+                _unitOfWork.Rollback();
+
+                return Result<List<ThemeFile>>.GetError(ErrorCode.ValidationError, ex.Message);
+            }
+            catch (DbUpdateException ex)
+            {
+                _unitOfWork.Rollback();
+
+                return Result<List<ThemeFile>>
+                    .GetError(ErrorCode.ValidationError, ex.Message);
+            }
+
             await _unitOfWork.CommitAsync();
 
             Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
@@ -97,9 +78,69 @@ namespace CharlieBackend.Business.Services
                 .GetSuccess(_mapper.Map<List<ThemeFile>>(importedThemes));
         }
 
-        /*private async Task IsValueValid(ThemeFile fileLine, int rowCounter)
+        private async Task IsValueValid(ThemeFile fileLine, int rowCounter)
         {
-        }*/
+            List<string> themes = new List<string>();
+
+            foreach (var theme in await _unitOfWork.ThemeRepository.GetAllAsync())
+            {
+                themes.Add(theme.Name);
+            }
+
+            if (themes.Contains(fileLine.ThemeName))
+            {
+                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+
+                throw new DbUpdateException($"Theme with name {fileLine.ThemeName} already exists. " +
+                   $"Problem was occured in col A, row {rowCounter}.");
+            }
+            if (fileLine.ThemeName.Length > 40) 
+            {
+                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+
+                throw new DbUpdateException($"Inputed theme it too long. " +
+                   $"Problem was occured in col A, row {rowCounter}.");
+            }
+        }
+
+        private async Task<XLWorkbook> ValidateFile(IFormFile file)
+        {
+            string fileExtension = "." + file.FileName.Split('.')[file.FileName.Split('.').Length - 1];
+            XLWorkbook book = new XLWorkbook();
+
+            if (fileExtension == ".xlsx")
+            {
+                string pathToExcel = await CreateFile(file);
+                book = new XLWorkbook(pathToExcel);
+            }
+            else if (fileExtension == ".csv")
+            {
+                string pathToCsv = await CreateFile(file);
+                book = new XLWorkbook(ConvertCsvToExcel(pathToCsv));
+            }
+            else
+            {
+                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+
+                throw new FormatException(
+                    "Format of uploaded file is incorrect. " +
+                    "It must have .xlsx or .csv extension");
+            }
+
+            var themesSheet = book.Worksheet("Themes");
+            char charPointer = 'A';
+
+            var properties = typeof(ThemeFile).GetProperties();
+            foreach (PropertyInfo property in properties)
+            {
+                if (property.Name != Convert.ToString(themesSheet.Cell($"{charPointer}1").Value))
+                {
+                    throw new FormatException("Check headers in the file.");
+                }
+                charPointer++;
+            }
+            return book;
+        }
 
         private bool IsEndOfFile(int rowCounter, IXLWorksheet sheet)
         {
@@ -129,11 +170,27 @@ namespace CharlieBackend.Business.Services
             return path;
         }
 
-        public bool CheckIfExcelFile(IFormFile file)
+        public string ConvertCsvToExcel(string pathToCsv)
         {
-            var extension = "." + file.FileName.Split('.')[file.FileName.Split('.').Length - 1];
+            string pathToExcel = pathToCsv.Remove(pathToCsv.Length - 4) + ".xlsx";
 
-            return (extension == ".xlsx" || extension == ".xls");
+            string worksheetsName = "Themes";
+
+            bool firstRowIsHeader = false;
+
+            var format = new ExcelTextFormat();
+            format.Delimiter = ',';
+            format.EOL = "\r";
+
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            using (ExcelPackage package = new ExcelPackage(new FileInfo(pathToExcel)))
+            {
+                ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(worksheetsName);
+                worksheet.Cells["A1"].LoadFromText(new FileInfo(pathToCsv), format, OfficeOpenXml.Table.TableStyles.Dark1, firstRowIsHeader);
+                package.Save();
+            }
+
+            return pathToExcel;
         }
     }
 }
