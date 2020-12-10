@@ -46,11 +46,11 @@ namespace CharlieBackend.Business.Services
 
             try
             {
-                var groupName =(await _unitOfWork.StudentGroupRepository.SearchStudentGroup(groupId)).Name;
+                var group = _unitOfWork.StudentGroupRepository.SearchStudentGroup(groupId);
 
-                if (!await _unitOfWork.StudentGroupRepository.IsGroupNameExistAsync(groupName) || groupName == null)
+                if (group == null)
                 {
-                    return Result<List<StudentFile>>.GetError(ErrorCode.NotFound, $"Group {groupName} doesn't exist.");
+                    return Result<List<StudentFile>>.GetError(ErrorCode.NotFound, $"Group with id {groupId} doesn't exist.");
                 }
 
                 var studentsSheet = (await ValidateFile(uploadedFile)).Worksheet("Students");

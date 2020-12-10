@@ -66,7 +66,7 @@ namespace CharlieBackend.Data.Repositories.Impl
         public StudentGroup SearchStudentGroup(long studentGroupId)
         {
             return _applicationContext.StudentGroups
-                   .Include(group => group.Id == studentGroupId)
+                   .Where(group => group.Id == studentGroupId)
                    .FirstOrDefault();
         }
 
