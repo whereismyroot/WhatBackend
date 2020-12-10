@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using AutoMapper;
+using OfficeOpenXml;
 using ClosedXML.Excel;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -256,6 +257,29 @@ namespace CharlieBackend.Business.Services
             var extension = "." + file.FileName.Split('.')[file.FileName.Split('.').Length - 1];
 
             return (extension == ".xlsx" || extension == ".xls");
+        }
+
+        public string ConvertCsvToExcel(string pathToCsv)
+        {
+            string pathToExcel = pathToCsv.Remove(pathToCsv.Length - 4) + ".xlsx";
+
+            string worksheetsName = "Themes";
+
+            bool firstRowIsHeader = false;
+
+            var format = new ExcelTextFormat();
+            format.Delimiter = ',';
+            format.EOL = "\r";
+
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            using (ExcelPackage package = new ExcelPackage(new FileInfo(pathToExcel)))
+            {
+                ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(worksheetsName);
+                worksheet.Cells["A1"].LoadFromText(new FileInfo(pathToCsv), format, OfficeOpenXml.Table.TableStyles.Dark1, firstRowIsHeader);
+                package.Save();
+            }
+
+            return pathToExcel;
         }
     }
 }
