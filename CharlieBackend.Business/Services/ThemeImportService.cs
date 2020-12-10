@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using AutoMapper;
+using OfficeOpenXml;
 using ClosedXML.Excel;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -12,7 +13,6 @@ using CharlieBackend.Core.FileModels;
 using CharlieBackend.Core.Models.ResultModel;
 using CharlieBackend.Business.Services.Interfaces;
 using CharlieBackend.Data.Repositories.Impl.Interfaces;
-using OfficeOpenXml;
 
 namespace CharlieBackend.Business.Services
 {
