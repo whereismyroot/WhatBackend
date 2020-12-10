@@ -46,9 +46,9 @@ namespace CharlieBackend.Business.Services
 
             try
             {
-                var groupName = _unitOfWork.StudentGroupRepository.SearchStudentGroup(groupId).Name;
+                var groupName =(await _unitOfWork.StudentGroupRepository.SearchStudentGroup(groupId)).Name;
 
-                if (!await _unitOfWork.StudentGroupRepository.IsGroupNameExistAsync(groupName))
+                if (!await _unitOfWork.StudentGroupRepository.IsGroupNameExistAsync(groupName) || groupName == null)
                 {
                     return Result<List<StudentFile>>.GetError(ErrorCode.NotFound, $"Group {groupName} doesn't exist.");
                 }
