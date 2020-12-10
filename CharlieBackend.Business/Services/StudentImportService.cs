@@ -20,7 +20,7 @@ namespace CharlieBackend.Business.Services
     {
         #region private
         private readonly IStudentService _studentService;
-        private readonly IStudentGroupService _studentGroupService; 
+        private readonly IStudentGroupService _studentGroupService;
         private readonly IAccountService _accountService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
@@ -42,76 +42,61 @@ namespace CharlieBackend.Business.Services
         public async Task<Result<List<StudentFile>>> ImportFileAsync(long groupId, IFormFile uploadedFile)
         {
             List<StudentFile> importedAccounts = new List<StudentFile>();
-            var groupName = _unitOfWork.StudentGroupRepository.SearchStudentGroup(groupId).Name;
-            if (!await _unitOfWork.StudentGroupRepository.IsGroupNameExistAsync(groupName))
+
+            try
             {
-                return Result<List<StudentFile>>.GetError(ErrorCode.NotFound, $"Group {groupName} doesn't exist.");
-            }
+                var groupName = _unitOfWork.StudentGroupRepository.SearchStudentGroup(groupId).Name;
 
-            if (uploadedFile != null)
-            {
-                var book = new XLWorkbook(await CreateFile(uploadedFile));
-                var studentsSheet = book.Worksheet("Students");
-
-                Type studentType = typeof(StudentFile);
-                char charPointer = 'A';
-                int rowCounter = 2;
-
-                var properties = studentType.GetProperties();
-                foreach (PropertyInfo property in properties)
+                if (!await _unitOfWork.StudentGroupRepository.IsGroupNameExistAsync(groupName))
                 {
-                    if (property.Name != Convert.ToString(studentsSheet.Cell($"{charPointer}1").Value))
-                    {
-                        return Result<List<StudentFile>>.GetError(ErrorCode.ValidationError,
-                                    "The format of the downloaded file is not suitable."
-                                         + "Check headers in the file.");
-                    }
-                    charPointer++;
+                    return Result<List<StudentFile>>.GetError(ErrorCode.NotFound, $"Group {groupName} doesn't exist.");
                 }
+
+                var studentsSheet = (await ValidateFile(uploadedFile)).Worksheet("Students");
+
+                int rowCounter = 2;
 
                 while (!IsEndOfFile(rowCounter, studentsSheet))
                 {
 
-                    try
+                    StudentFile fileLine = new StudentFile
                     {
-                        StudentFile fileLine = new StudentFile
-                        {
-                            Email = studentsSheet.Cell($"A{rowCounter}").Value.ToString(),
-                            FirstName = studentsSheet.Cell($"B{rowCounter}").Value.ToString(),
-                            LastName = studentsSheet.Cell($"C{rowCounter}").Value.ToString()
-                        };
+                        Email = studentsSheet.Cell($"A{rowCounter}").Value.ToString(),
+                        FirstName = studentsSheet.Cell($"B{rowCounter}").Value.ToString(),
+                        LastName = studentsSheet.Cell($"C{rowCounter}").Value.ToString()
+                    };
 
-                        await ValidateFileValue(fileLine, rowCounter);
+                    await ValidateFileValue(fileLine, rowCounter);
 
-                        CreateAccountDto studentAccount = new CreateAccountDto
-                        {
-                            Email = fileLine.Email,
-                            FirstName = fileLine.FirstName,
-                            LastName = fileLine.LastName,
-                            Password = "changeYourPassword",
-                            ConfirmPassword = "changeYourPassword"
-                        };
-
-                        await _accountService.CreateAccountAsync(studentAccount);
-
-                        importedAccounts.Add(fileLine);
-                        rowCounter++;
-                    }
-                    catch (FormatException ex)
+                    CreateAccountDto studentAccount = new CreateAccountDto
                     {
-                        _unitOfWork.Rollback();
+                        Email = fileLine.Email,
+                        FirstName = fileLine.FirstName,
+                        LastName = fileLine.LastName,
+                        Password = "changeYourPassword",
+                        ConfirmPassword = "changeYourPassword"
+                    };
 
-                        return Result<List<StudentFile>>.GetError(ErrorCode.ValidationError,
-                            "The format of the inputed data is incorrect.\n" + ex.Message);
-                    }
-                    catch (DbUpdateException ex)
-                    {
-                        _unitOfWork.Rollback();
+                    await _accountService.CreateAccountAsync(studentAccount);
 
-                        return Result<List<StudentFile>>.GetError(ErrorCode.ValidationError,
-                            "Inputed data is incorrect.\n" + ex.Message);
-                    }
+                    importedAccounts.Add(fileLine);
+                    rowCounter++;
                 }
+            }
+
+            catch (FormatException ex)
+            {
+                _unitOfWork.Rollback();
+
+                return Result<List<StudentFile>>.GetError(ErrorCode.ValidationError,
+                    "The format of the inputed data is incorrect.\n" + ex.Message);
+            }
+            catch (DbUpdateException ex)
+            {
+                _unitOfWork.Rollback();
+
+                return Result<List<StudentFile>>.GetError(ErrorCode.ValidationError,
+                    "Inputed data is incorrect.\n" + ex.Message);
             }
             await _unitOfWork.CommitAsync();
 
@@ -169,6 +154,44 @@ namespace CharlieBackend.Business.Services
             await _unitOfWork.CommitAsync();
         }
 
+        private async Task<XLWorkbook> ValidateFile(IFormFile file)
+        {
+            string fileExtension = "." + file.FileName.Split('.')[file.FileName.Split('.').Length - 1];
+            XLWorkbook book = new XLWorkbook();
+
+            if (fileExtension == ".xlsx")
+            {
+                string pathToExcel = await CreateFile(file);
+                book = new XLWorkbook(pathToExcel);
+            }
+            else if (fileExtension == ".csv")
+            {
+                string pathToCsv = await CreateFile(file);
+                book = new XLWorkbook(ConvertCsvToExcel(pathToCsv));
+            }
+            else
+            {
+                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+
+                throw new FormatException(
+                    "Format of uploaded file is incorrect. " +
+                    "It must have .xlsx or .csv extension");
+            }
+
+            var studentsSheet = book.Worksheet("Students");
+            char charPointer = 'A';
+
+            var properties = typeof(StudentFile).GetProperties();
+            foreach (PropertyInfo property in properties)
+            {
+                if (property.Name != Convert.ToString(studentsSheet.Cell($"{charPointer}1").Value))
+                {
+                    throw new FormatException("Check headers in the file.");
+                }
+                charPointer++;
+            }
+            return book;
+        }
 
         private async Task ValidateFileValue(StudentFile fileLine, int rowCounter)
         {

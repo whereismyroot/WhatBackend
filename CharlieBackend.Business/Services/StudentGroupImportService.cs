@@ -28,75 +28,56 @@ namespace CharlieBackend.Business.Services
 
         public async Task<Result<List<StudentGroupFile>>> ImportFileAsync(IFormFile uploadedFile)
         {
-            string path = "";
             List<StudentGroupFile> importedGroups = new List<StudentGroupFile>();
 
-            if (uploadedFile != null)
+            try
             {
-                path = await CreateFile(uploadedFile);
-                var book = new XLWorkbook(path);
-                var groupsSheet = book.Worksheet("Groups");
+                var groupsSheet = (await ValidateFile(uploadedFile)).Worksheet("Groups");
 
-                Type studentGroupType = typeof(StudentGroupFile);
-                char charPointer = 'A';
                 int rowCounter = 2;
-
-                var properties = studentGroupType.GetProperties();
-                foreach (PropertyInfo property in properties)
-                {
-                    if (property.Name != Convert.ToString(groupsSheet.Cell($"{charPointer}1").Value))
-                    {
-                        return Result<List<StudentGroupFile>>.GetError(ErrorCode.ValidationError,
-                                    "The format of the downloaded file is not suitable."
-                                         + "Check headers in the file.");
-                    }
-                    charPointer++;
-                }
 
                 while (!IsEndOfFile(rowCounter, groupsSheet))
                 {
-                    try
+                    StudentGroupFile fileLine = new StudentGroupFile
                     {
-                        StudentGroupFile fileLine = new StudentGroupFile
-                        {
-                            CourseId = groupsSheet.Cell($"B{rowCounter}").Value.ToString(),
-                            Name = groupsSheet.Cell($"C{rowCounter}").Value.ToString(),
-                            StartDate = Convert
-                            .ToDateTime(groupsSheet.Cell($"D{rowCounter}").Value),
-                            FinishDate = Convert
-                            .ToDateTime(groupsSheet.Cell($"E{rowCounter}").Value)
-                        };
+                        CourseId = groupsSheet.Cell($"B{rowCounter}").Value.ToString(),
+                        Name = groupsSheet.Cell($"C{rowCounter}").Value.ToString(),
+                        StartDate = Convert
+                        .ToDateTime(groupsSheet.Cell($"D{rowCounter}").Value),
+                        FinishDate = Convert
+                        .ToDateTime(groupsSheet.Cell($"E{rowCounter}").Value)
+                    };
 
-                        await ValidateFileValue(fileLine, rowCounter);
+                    await ValidateFileValue(fileLine, rowCounter);
 
-                        StudentGroup group = new StudentGroup
-                        {
-                            CourseId = Convert.ToInt32(fileLine.CourseId),
-                            Name = fileLine.Name,
-                            StartDate = fileLine.StartDate,
-                            FinishDate = fileLine.FinishDate,
-                        };
-
-                        importedGroups.Add(fileLine);
-                        _unitOfWork.StudentGroupRepository.Add(group);
-                        rowCounter++;
-                    }
-                    catch (FormatException ex)
+                    StudentGroup group = new StudentGroup
                     {
-                        _unitOfWork.Rollback();
+                        CourseId = Convert.ToInt32(fileLine.CourseId),
+                        Name = fileLine.Name,
+                        StartDate = fileLine.StartDate,
+                        FinishDate = fileLine.FinishDate,
+                    };
 
-                        return Result<List<StudentGroupFile>>.GetError(ErrorCode.ValidationError,
-                            "The format of the inputed data is incorrect.\n" + ex.Message);
-                    }
-                    catch (DbUpdateException ex)
-                    {
-                        _unitOfWork.Rollback();
-
-                        return Result<List<StudentGroupFile>>
-                            .GetError(ErrorCode.ValidationError,
-                                "Inputed data is incorrect.\n" + ex.Message);
-                    }
+                    importedGroups.Add(fileLine);
+                    _unitOfWork.StudentGroupRepository.Add(group);
+                    rowCounter++;
                 }
+            }
+
+            catch (FormatException ex)
+            {
+                _unitOfWork.Rollback();
+
+                return Result<List<StudentGroupFile>>.GetError(ErrorCode.ValidationError,
+                    "The format of the inputed data is incorrect.\n" + ex.Message);
+            }
+            catch (DbUpdateException ex)
+            {
+                _unitOfWork.Rollback();
+
+                return Result<List<StudentGroupFile>>
+                    .GetError(ErrorCode.ValidationError,
+                        "Inputed data is incorrect.\n" + ex.Message);
             }
             await _unitOfWork.CommitAsync();
 
@@ -104,6 +85,45 @@ namespace CharlieBackend.Business.Services
 
             return Result<List<StudentGroupFile>>
                 .GetSuccess(_mapper.Map<List<StudentGroupFile>>(importedGroups));
+        }
+
+        private async Task<XLWorkbook> ValidateFile(IFormFile file)
+        {
+            string fileExtension = "." + file.FileName.Split('.')[file.FileName.Split('.').Length - 1];
+            XLWorkbook book = new XLWorkbook();
+
+            if (fileExtension == ".xlsx")
+            {
+                string pathToExcel = await CreateFile(file);
+                book = new XLWorkbook(pathToExcel);
+            }
+            else if (fileExtension == ".csv")
+            {
+                string pathToCsv = await CreateFile(file);
+                book = new XLWorkbook(ConvertCsvToExcel(pathToCsv));
+            }
+            else
+            {
+                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+
+                throw new FormatException(
+                    "Format of uploaded file is incorrect. " +
+                    "It must have .xlsx or .csv extension");
+            }
+
+            var themesSheet = book.Worksheet("Groups");
+            char charPointer = 'A';
+
+            var properties = typeof(StudentGroupFile).GetProperties();
+            foreach (PropertyInfo property in properties)
+            {
+                if (property.Name != Convert.ToString(themesSheet.Cell($"{charPointer}1").Value))
+                {
+                    throw new FormatException("Check headers in the file.");
+                }
+                charPointer++;
+            }
+            return book;
         }
 
         private async Task ValidateFileValue(StudentGroupFile fileLine, int rowCounter)
@@ -117,30 +137,40 @@ namespace CharlieBackend.Business.Services
 
             if (fileLine.CourseId.Replace(" ", "") == "")
             {
+                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+
                 throw new FormatException("CourseId field shouldn't be empty.\n" +
                     $"Problem was occured in col B, row {rowCounter}");
             }
 
             if (fileLine.Name == "")
             {
+                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+
                 throw new FormatException("Name field shouldn't be empty.\n" +
                     $"Problem was occured in col C, row {rowCounter}");
             }
 
             if (fileLine.StartDate > fileLine.FinishDate)
             {
+                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+
                 throw new FormatException("StartDate must be less than FinishDate.\n" +
                     $"Problem was occured in col D/E, row {rowCounter}.");
             }
 
             if (!existingCourseIds.Contains(Convert.ToInt64(fileLine.CourseId)))
             {
+                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+
                 throw new DbUpdateException($"Course with id {fileLine.CourseId} doesn't exist.\n" +
                    $"Problem was occured in col B, row {rowCounter}.");
             }
 
             if (await _unitOfWork.StudentGroupRepository.IsGroupNameExistAsync(fileLine.Name))
             {
+                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+
                 throw new DbUpdateException($"Group with name {fileLine.Name} already exists.\n" +
                    $"Problem was occured in col C, row {rowCounter}.");
             }
