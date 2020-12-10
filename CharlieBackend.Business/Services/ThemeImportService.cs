@@ -44,7 +44,7 @@ namespace CharlieBackend.Business.Services
                         ThemeName = themesSheet.Cell($"A{rowCounter}").Value.ToString(),
                     };
 
-                    await IsValueValid(fileLine, rowCounter);
+                    await ValidateFileValue(fileLine, rowCounter);
 
                     Theme theme = new Theme
                     {
@@ -78,7 +78,7 @@ namespace CharlieBackend.Business.Services
                 .GetSuccess(_mapper.Map<List<ThemeFile>>(importedThemes));
         }
 
-        private async Task IsValueValid(ThemeFile fileLine, int rowCounter)
+        private async Task ValidateFileValue(ThemeFile fileLine, int rowCounter)
         {
             List<string> themes = new List<string>();
 

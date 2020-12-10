@@ -81,7 +81,7 @@ namespace CharlieBackend.Business.Services
                             LastName = studentsSheet.Cell($"C{rowCounter}").Value.ToString()
                         };
 
-                        await IsValueValid(fileLine, rowCounter);
+                        await ValidateFileValue(fileLine, rowCounter);
 
                         CreateAccountDto studentAccount = new CreateAccountDto
                         {
@@ -170,7 +170,7 @@ namespace CharlieBackend.Business.Services
         }
 
 
-        private async Task IsValueValid(StudentFile fileLine, int rowCounter)
+        private async Task ValidateFileValue(StudentFile fileLine, int rowCounter)
         {
             List<string> existingEmails = new List<string>();
 

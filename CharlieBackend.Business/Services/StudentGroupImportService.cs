@@ -67,7 +67,7 @@ namespace CharlieBackend.Business.Services
                             .ToDateTime(groupsSheet.Cell($"E{rowCounter}").Value)
                         };
 
-                        await IsValueValid(fileLine, rowCounter);
+                        await ValidateFileValue(fileLine, rowCounter);
 
                         StudentGroup group = new StudentGroup
                         {
@@ -106,7 +106,7 @@ namespace CharlieBackend.Business.Services
                 .GetSuccess(_mapper.Map<List<StudentGroupFile>>(importedGroups));
         }
 
-        private async Task IsValueValid(StudentGroupFile fileLine, int rowCounter)
+        private async Task ValidateFileValue(StudentGroupFile fileLine, int rowCounter)
         {
             List<long> existingCourseIds = new List<long>();
 
