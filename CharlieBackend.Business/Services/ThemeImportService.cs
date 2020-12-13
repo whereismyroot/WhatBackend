@@ -13,6 +13,7 @@ using CharlieBackend.Core.FileModels;
 using CharlieBackend.Core.Models.ResultModel;
 using CharlieBackend.Business.Services.Interfaces;
 using CharlieBackend.Data.Repositories.Impl.Interfaces;
+using System.Linq;
 
 namespace CharlieBackend.Business.Services
 {
@@ -30,10 +31,11 @@ namespace CharlieBackend.Business.Services
         public async Task<Result<List<ThemeFile>>> ImportFileAsync(IFormFile uploadedFile)
         {
             List<ThemeFile> importedThemes = new List<ThemeFile>();
+            var worksheetName = "Themes";
 
             try
             {
-                var themesSheet = (await ValidateFile(uploadedFile)).Worksheet("Themes");
+                var themesSheet = (await ValidateFile(uploadedFile, worksheetName)).Worksheet(worksheetName);
 
                 int rowCounter = 2;
 
@@ -44,15 +46,30 @@ namespace CharlieBackend.Business.Services
                         ThemeName = themesSheet.Cell($"A{rowCounter}").Value.ToString(),
                     };
 
-                    await ValidateFileValue(fileLine, rowCounter);
+                    List<string> themes = new List<string>();
 
-                    Theme theme = new Theme
+                    foreach (var theme in await _unitOfWork.ThemeRepository.GetAllAsync())
+                    {
+                        themes.Add(theme.Name);
+                    }
+
+                    var errors = ValidateFileValue(fileLine, rowCounter, themes);
+
+                    if (errors.Any()) 
+                    {
+                        _unitOfWork.Rollback();
+
+                        return Result<List<ThemeFile>>
+                                .GetError(ErrorCode.ValidationError, string.Join("\n", errors));
+                    }
+
+                    Theme newTheme = new Theme
                     {
                         Name = fileLine.ThemeName,
                     };
 
                     importedThemes.Add(fileLine);
-                    _unitOfWork.ThemeRepository.Add(theme);
+                    _unitOfWork.ThemeRepository.Add(newTheme);
                     rowCounter++;
                 }
             }
@@ -62,84 +79,71 @@ namespace CharlieBackend.Business.Services
 
                 return Result<List<ThemeFile>>.GetError(ErrorCode.ValidationError, ex.Message);
             }
-            catch (DbUpdateException ex)
-            {
-                _unitOfWork.Rollback();
-
-                return Result<List<ThemeFile>>
-                    .GetError(ErrorCode.ValidationError, ex.Message);
-            }
 
             await _unitOfWork.CommitAsync();
-
-            Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
 
             return Result<List<ThemeFile>>
                 .GetSuccess(_mapper.Map<List<ThemeFile>>(importedThemes));
         }
 
-        private async Task ValidateFileValue(ThemeFile fileLine, int rowCounter)
+        private IEnumerable<string> ValidateFileValue(ThemeFile fileLine, 
+                                                      int rowCounter, 
+                                                      List<string> themes)
         {
-            List<string> themes = new List<string>();
-
-            foreach (var theme in await _unitOfWork.ThemeRepository.GetAllAsync())
-            {
-                themes.Add(theme.Name);
-            }
-
             if (themes.Contains(fileLine.ThemeName))
             {
-                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
-
-                throw new DbUpdateException($"Theme with name {fileLine.ThemeName} already exists. " +
-                   $"Problem was occured in col A, row {rowCounter}.");
+                yield return $"Theme with name {fileLine.ThemeName} already exists. " +
+                   $"Problem was occured in col A, row {rowCounter}.";
             }
+
             if (fileLine.ThemeName.Length > 40) 
             {
-                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
-
-                throw new DbUpdateException($"Inputed theme it too long. " +
-                   $"Problem was occured in col A, row {rowCounter}.");
+                yield return $"Inputed theme it too long. " +
+                   $"Problem was occured in col A, row {rowCounter}.";
             }
         }
 
-        private async Task<XLWorkbook> ValidateFile(IFormFile file)
+        private async Task<XLWorkbook> ValidateFile(IFormFile file, string worksheetName)
         {
-            string fileExtension = "." + file.FileName.Split('.')[file.FileName.Split('.').Length - 1];
-            XLWorkbook book = new XLWorkbook();
-
-            if (fileExtension == ".xlsx")
+            using (var stream = new MemoryStream())
             {
-                string pathToExcel = await CreateFile(file);
-                book = new XLWorkbook(pathToExcel);
-            }
-            else if (fileExtension == ".csv")
-            {
-                string pathToCsv = await CreateFile(file);
-                book = new XLWorkbook(ConvertCsvToExcel(pathToCsv));
-            }
-            else
-            {
-                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+                XLWorkbook book = new XLWorkbook();
+                string fileExtension = "."
+                        + file.FileName.Split('.')[^1];
 
-                throw new FormatException(
-                    "Format of uploaded file is incorrect. " +
-                    "It must have .xlsx or .csv extension");
-            }
+                await file.CopyToAsync(stream);
 
-            var themesSheet = book.Worksheet("Themes");
-            char charPointer = 'A';
-
-            var properties = typeof(ThemeFile).GetProperties();
-            foreach (PropertyInfo property in properties)
-            {
-                if (property.Name != Convert.ToString(themesSheet.Cell($"{charPointer}1").Value))
+                if (fileExtension == ".xlsx")
                 {
-                    throw new FormatException("Check headers in the file.");
+                    book = new XLWorkbook(stream);
                 }
-                charPointer++;
+                else if (fileExtension == ".csv")
+                {
+                    book = new XLWorkbook(ConvertCsvToExcel(stream, worksheetName));
+                }
+                else
+                {
+                    throw new FormatException(
+                        "Format of uploaded file is incorrect. " +
+                        "It must have .xlsx or .csv extension");
+                }
+                var themesSheet = book.Worksheet(worksheetName);
+                char charPointer = 'A';
+                var properties = typeof(ThemeFile).GetProperties();
+
+                foreach (PropertyInfo property in properties)
+                {
+                    if (property.Name
+                            != Convert.ToString(themesSheet.
+                                Cell($"{charPointer}1").Value))
+                    {
+                        throw new FormatException("Format of uploaded file is incorrect. "
+                                                + "Check headers in the file.");
+                    }
+                    charPointer++;
+                }
+                return book;
             }
-            return book;
         }
 
         private bool IsEndOfFile(int rowCounter, IXLWorksheet sheet)
@@ -147,50 +151,30 @@ namespace CharlieBackend.Business.Services
             return (sheet.Cell($"A{rowCounter}").Value.ToString() == "");
         }
 
-        private async Task<string> CreateFile(IFormFile file)
+        public Stream ConvertCsvToExcel(MemoryStream stream, string worksheetName)
         {
-            string path = "";
-            string fileName;
-            var extension = "." + file.FileName.Split('.')[file.FileName.Split('.').Length - 1];
-            fileName = DateTime.Now.Ticks + extension; //Create a new Name for the file due to security reasons.
-
-            var pathBuilt = Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files");
-
-            if (!Directory.Exists(pathBuilt))
+            string fileContent;
+            stream.Position = 0;
+            using (var reader = new StreamReader(stream))
             {
-                Directory.CreateDirectory(pathBuilt);
+                fileContent = reader.ReadToEnd();
             }
-
-            path = Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files", fileName);
-
-            using (var stream = new FileStream(path, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-            return path;
-        }
-
-        public string ConvertCsvToExcel(string pathToCsv)
-        {
-            string pathToExcel = pathToCsv.Remove(pathToCsv.Length - 4) + ".xlsx";
-
-            string worksheetsName = "Themes";
-
-            bool firstRowIsHeader = false;
 
             var format = new ExcelTextFormat();
             format.Delimiter = ',';
             format.EOL = "\r";
 
+            var result = new MemoryStream();
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-            using (ExcelPackage package = new ExcelPackage(new FileInfo(pathToExcel)))
+            using (ExcelPackage package = new ExcelPackage())
             {
-                ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(worksheetsName);
-                worksheet.Cells["A1"].LoadFromText(new FileInfo(pathToCsv), format, OfficeOpenXml.Table.TableStyles.Dark1, firstRowIsHeader);
-                package.Save();
+                ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(worksheetName);
+                worksheet.Cells["A1"].LoadFromText(fileContent, format, OfficeOpenXml.Table.TableStyles.Dark1, false);
+                package.SaveAs(result);
+                result.Position = 0;
             }
 
-            return pathToExcel;
+            return result;
         }
     }
 }

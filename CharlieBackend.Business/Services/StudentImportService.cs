@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using AutoMapper;
+using System.Linq;
 using OfficeOpenXml;
 using ClosedXML.Excel;
 using System.Reflection;
@@ -43,6 +44,7 @@ namespace CharlieBackend.Business.Services
         public async Task<Result<List<StudentFile>>> ImportFileAsync(long groupId, IFormFile uploadedFile)
         {
             List<StudentFile> importedAccounts = new List<StudentFile>();
+            var worksheetName = "Students";
 
             try
             {
@@ -53,9 +55,16 @@ namespace CharlieBackend.Business.Services
                     return Result<List<StudentFile>>.GetError(ErrorCode.NotFound, $"Group with id {groupId} doesn't exist.");
                 }
 
-                var studentsSheet = (await ValidateFile(uploadedFile)).Worksheet("Students");
+                var studentsSheet = (await ValidateFile(uploadedFile, worksheetName)).Worksheet(worksheetName);
 
                 int rowCounter = 2;
+
+                List<string> existingEmails = new List<string>();
+
+                foreach (Account account in await _unitOfWork.AccountRepository.GetAllAsync())
+                {
+                    existingEmails.Add(account.Email);
+                }
 
                 while (!IsEndOfFile(rowCounter, studentsSheet))
                 {
@@ -67,7 +76,14 @@ namespace CharlieBackend.Business.Services
                         LastName = studentsSheet.Cell($"C{rowCounter}").Value.ToString()
                     };
 
-                    await ValidateFileValue(fileLine, rowCounter);
+                    var errors = ValidateFileValue(fileLine, rowCounter, existingEmails);
+
+                    if (errors.Any())
+                    {
+                        _unitOfWork.Rollback();
+
+                        return Result<List<StudentFile>>.GetError(ErrorCode.ValidationError, string.Join("\n", errors));
+                    }
 
                     CreateAccountDto studentAccount = new CreateAccountDto
                     {
@@ -84,24 +100,14 @@ namespace CharlieBackend.Business.Services
                     rowCounter++;
                 }
             }
-
             catch (FormatException ex)
             {
                 _unitOfWork.Rollback();
 
-                return Result<List<StudentFile>>.GetError(ErrorCode.ValidationError,
-                    "The format of the inputed data is incorrect.\n" + ex.Message);
+                return Result<List<StudentFile>>.GetError(ErrorCode.ValidationError, ex.Message);
             }
-            catch (DbUpdateException ex)
-            {
-                _unitOfWork.Rollback();
 
-                return Result<List<StudentFile>>.GetError(ErrorCode.ValidationError,
-                    "Inputed data is incorrect.\n" + ex.Message);
-            }
             await _unitOfWork.CommitAsync();
-
-            Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
 
             await BoundStudentsToTheGroupAsync(importedAccounts, groupId);
 
@@ -155,70 +161,65 @@ namespace CharlieBackend.Business.Services
             await _unitOfWork.CommitAsync();
         }
 
-        private async Task<XLWorkbook> ValidateFile(IFormFile file)
+        private async Task<XLWorkbook> ValidateFile(IFormFile file, string WorksheetName)
         {
-            string fileExtension = "." + file.FileName.Split('.')[file.FileName.Split('.').Length - 1];
-            XLWorkbook book = new XLWorkbook();
-
-            if (fileExtension == ".xlsx")
+            using (var stream = new MemoryStream())
             {
-                string pathToExcel = await CreateFile(file);
-                book = new XLWorkbook(pathToExcel);
-            }
-            else if (fileExtension == ".csv")
-            {
-                string pathToCsv = await CreateFile(file);
-                book = new XLWorkbook(ConvertCsvToExcel(pathToCsv));
-            }
-            else
-            {
-                Array.ForEach(Directory.GetFiles(Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files")), File.Delete);
+                string fileExtension = "."
+                        + file.FileName.Split('.')[^1];
+                XLWorkbook book = new XLWorkbook();
 
-                throw new FormatException(
-                    "Format of uploaded file is incorrect. " +
-                    "It must have .xlsx or .csv extension");
-            }
+                await file.CopyToAsync(stream);
 
-            var studentsSheet = book.Worksheet("Students");
-            char charPointer = 'A';
-
-            var properties = typeof(StudentFile).GetProperties();
-            foreach (PropertyInfo property in properties)
-            {
-                if (property.Name != Convert.ToString(studentsSheet.Cell($"{charPointer}1").Value))
+                if (fileExtension == ".xlsx")
                 {
-                    throw new FormatException("Check headers in the file.");
+                    book = new XLWorkbook(stream);
                 }
-                charPointer++;
+                else if (fileExtension == ".csv")
+                {
+                    book = new XLWorkbook(ConvertCsvToExcel(stream, WorksheetName));
+                }
+                else
+                {
+                    throw new FormatException(
+                        "Format of uploaded file is incorrect. " +
+                        "It must have .xlsx or .csv extension");
+                }
+
+                var studentsSheet = book.Worksheet("Students");
+                char charPointer = 'A';
+
+                var properties = typeof(StudentFile).GetProperties();
+                foreach (PropertyInfo property in properties)
+                {
+                    if (property.Name != Convert.ToString(studentsSheet.Cell($"{charPointer}1").Value))
+                    {
+                        throw new FormatException("Check headers in the file.");
+                    }
+                    charPointer++;
+                }
+                return book;
             }
-            return book;
         }
 
-        private async Task ValidateFileValue(StudentFile fileLine, int rowCounter)
+        private IEnumerable<string> ValidateFileValue(StudentFile fileLine, int rowCounter, List<string> existingEmails)
         {
-            List<string> existingEmails = new List<string>();
-
-            foreach (Account account in await _unitOfWork.AccountRepository.GetAllAsync())
-            {
-                existingEmails.Add(account.Email);
-            }
-
             if (fileLine.FirstName == "")
             {
-                throw new FormatException("Name field shouldn't be empty.\n" +
-                    $"Problem was occured in col B, row {rowCounter}");
+                yield return "Name field shouldn't be empty.\n" +
+                    $"Problem was occured in col B, row {rowCounter}";
             }
 
             if (fileLine.LastName == "")
             {
-                throw new FormatException("Name field shouldn't be empty.\n" +
-                    $"Problem was occured in col C, row {rowCounter}");
+                yield return "Name field shouldn't be empty.\n" +
+                    $"Problem was occured in col C, row {rowCounter}";
             }
 
             if (existingEmails.Contains(fileLine.Email))
             {
-                throw new DbUpdateException($"Account with email {fileLine.Email} already exists.\n" +
-                   $"Problem was occured in col A, row {rowCounter}.");
+                yield return $"Account with email {fileLine.Email} already exists.\n" +
+                   $"Problem was occured in col A, row {rowCounter}.";
             }
         }
 
@@ -228,58 +229,30 @@ namespace CharlieBackend.Business.Services
                && (studentsSheet.Cell($"B{rowCounter}").Value.ToString() == "")
                && (studentsSheet.Cell($"C{rowCounter}").Value.ToString() == "");
         }
-
-        private async Task<string> CreateFile(IFormFile file)
+        public Stream ConvertCsvToExcel(MemoryStream stream, string worksheetName)
         {
-            string path = "";
-            string fileName;
-            var extension = "." + file.FileName.Split('.')[file.FileName.Split('.').Length - 1];
-            fileName = DateTime.Now.Ticks + extension; //Create a new Name for the file due to security reasons.
-
-            var pathBuilt = Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files");
-
-            if (!Directory.Exists(pathBuilt))
+            string fileContent;
+            stream.Position = 0;
+            using (var reader = new StreamReader(stream))
             {
-                Directory.CreateDirectory(pathBuilt);
+                fileContent = reader.ReadToEnd();
             }
-
-            path = Path.Combine(Directory.GetCurrentDirectory(), "Upload\\files", fileName);
-
-            using (var stream = new FileStream(path, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-            return path;
-        }
-
-        public bool CheckIfExcelFile(IFormFile file)
-        {
-            var extension = "." + file.FileName.Split('.')[file.FileName.Split('.').Length - 1];
-
-            return (extension == ".xlsx" || extension == ".xls");
-        }
-
-        public string ConvertCsvToExcel(string pathToCsv)
-        {
-            string pathToExcel = pathToCsv.Remove(pathToCsv.Length - 4) + ".xlsx";
-
-            string worksheetsName = "Themes";
-
-            bool firstRowIsHeader = false;
 
             var format = new ExcelTextFormat();
             format.Delimiter = ',';
             format.EOL = "\r";
 
+            var result = new MemoryStream();
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-            using (ExcelPackage package = new ExcelPackage(new FileInfo(pathToExcel)))
+            using (ExcelPackage package = new ExcelPackage())
             {
-                ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(worksheetsName);
-                worksheet.Cells["A1"].LoadFromText(new FileInfo(pathToCsv), format, OfficeOpenXml.Table.TableStyles.Dark1, firstRowIsHeader);
-                package.Save();
+                ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(worksheetName);
+                worksheet.Cells["A1"].LoadFromText(fileContent, format, OfficeOpenXml.Table.TableStyles.Dark1, false);
+                package.SaveAs(result);
+                result.Position = 0;
             }
 
-            return pathToExcel;
+            return result;
         }
     }
 }

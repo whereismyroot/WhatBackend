@@ -20,22 +20,22 @@ namespace CharlieBackend.Api.Controllers
     {
         private readonly IStudentImportService _studentImportService;
         private readonly IThemeImportService _themeImportService;
-        private readonly IStudentGroupImportService _groupImportService;
+        private readonly IStudentGroupImportService _studentGroupImportService;
 
         /// <summary>
         /// Import controller constructor
         /// </summary>
         public ImportController(IStudentImportService studentImportService,
-                                IStudentGroupImportService groupImportService,
+                                IStudentGroupImportService studentGroupImportService,
                                 IThemeImportService themeImportService)
         {
             _studentImportService = studentImportService;
-            _groupImportService = groupImportService;
+            _studentGroupImportService = studentGroupImportService;
             _themeImportService = themeImportService;
         }
 
         /// <summary>
-        /// Imports group data from .xlsx file to database
+        /// Imports group data from .xlsx or .csv file to database
         /// </summary>
         /// <response code="200">Successful import of data from file</response>
         /// <response code="HTTP: 400, API: 4">File validation error</response>
@@ -45,22 +45,13 @@ namespace CharlieBackend.Api.Controllers
         [HttpPost]
         public async Task<ActionResult> ImportGroupDataFromFile(IFormFile file)
         {
-            var listOfImportedGroups = new Result<List<StudentGroupFile>>();
+            var listOfImportedStudentGroups = await _studentGroupImportService.ImportFileAsync(file);
 
-            if (_groupImportService.CheckIfExcelFile(file))
-            {
-                listOfImportedGroups = await _groupImportService.ImportFileAsync(file);
-            }
-            else
-            {
-                return BadRequest(new { message = "Invalid file extension" });
-            }
-
-            return listOfImportedGroups.ToActionResult();
+            return listOfImportedStudentGroups.ToActionResult();
         }
 
         /// <summary>
-        /// Imports student data from .xlsx file to database
+        /// Imports student data from .xlsx or .csv file to database
         /// </summary>
         /// <response code="200">Successful import of data from file</response>
         /// <response code="HTTP: 400, API: 4">File validation error</response>
@@ -70,22 +61,13 @@ namespace CharlieBackend.Api.Controllers
         [HttpPost]
         public async Task<ActionResult> ImportStudentDataFromFile(long groupId, IFormFile file)
         {
-            var listOfImportedStudents = new Result<List<StudentFile>>();
-
-            if (_groupImportService.CheckIfExcelFile(file))
-            {
-                listOfImportedStudents = await _studentImportService.ImportFileAsync(groupId, file);
-            }
-            else
-            {
-                return BadRequest(new { message = "Invalid file extension" });
-            }
+            var listOfImportedStudents = await _studentImportService.ImportFileAsync(groupId, file);
 
             return listOfImportedStudents.ToActionResult();
         }
 
         /// <summary>
-        /// Imports student data from .xlsx file to database
+        /// Imports theme data from .xlsx or .csv file to database
         /// </summary>
         /// <response code="200">Successful import of data from file</response>
         /// <response code="HTTP: 400, API: 4">File validation error</response>
