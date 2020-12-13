@@ -19,11 +19,13 @@ namespace CharlieBackend.Business.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
+        private readonly INotificationService _notificationService;
 
-        public StudentGroupImportService(IUnitOfWork unitOfWork, IMapper mapper)
+        public StudentGroupImportService(IUnitOfWork unitOfWork, IMapper mapper, INotificationService notificationService)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _notificationService = notificationService;
         }
 
         public async Task<Result<List<StudentGroupFile>>> ImportFileAsync(IFormFile uploadedFile)
