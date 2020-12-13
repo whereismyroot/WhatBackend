@@ -29,7 +29,7 @@ namespace CharlieBackend.Business.Services
             _mapper = mapper;
         }
 
-        public async Task<Result<List<StudentGroupFile>>> ImportFileAsync(IFormFile uploadedFile)
+        public async Task<Result<List<StudentGroupFile>>> ImportFileAsync(long courseId, IFormFile uploadedFile)
         {
             List<StudentGroupFile> importedGroups = new List<StudentGroupFile>();
             var worksheetName = "Groups";
@@ -45,12 +45,11 @@ namespace CharlieBackend.Business.Services
                 {
                     StudentGroupFile fileLine = new StudentGroupFile
                     {
-                        CourseId = groupsSheet.Cell($"B{rowCounter}").Value.ToString(),
-                        Name = groupsSheet.Cell($"C{rowCounter}").Value.ToString(),
+                        Name = groupsSheet.Cell($"A{rowCounter}").Value.ToString(),
                         StartDate = Convert
-                        .ToDateTime(groupsSheet.Cell($"D{rowCounter}").Value),
+                        .ToDateTime(groupsSheet.Cell($"B{rowCounter}").Value),
                         FinishDate = Convert
-                        .ToDateTime(groupsSheet.Cell($"E{rowCounter}").Value)
+                        .ToDateTime(groupsSheet.Cell($"C{rowCounter}").Value)
                     };
 
                     List<long> existingCourseIds = new List<long>();
@@ -62,7 +61,8 @@ namespace CharlieBackend.Business.Services
 
                     var errors = ValidateFileValue(fileLine, rowCounter, existingCourseIds, 
                             await _unitOfWork.StudentGroupRepository
-                                    .IsGroupNameExistAsync(fileLine.Name));
+                                    .IsGroupNameExistAsync(fileLine.Name),
+                                    courseId);
 
                     if (errors.Any()) 
                     {
@@ -74,7 +74,7 @@ namespace CharlieBackend.Business.Services
 
                     StudentGroup group = new StudentGroup
                     {
-                        CourseId = Convert.ToInt32(fileLine.CourseId),
+                        CourseId = courseId,
                         Name = fileLine.Name,
                         StartDate = fileLine.StartDate,
                         FinishDate = fileLine.FinishDate,
@@ -145,14 +145,9 @@ namespace CharlieBackend.Business.Services
         private IEnumerable<string> ValidateFileValue(StudentGroupFile fileLine,
                                                       int rowCounter, 
                                                       List<long> existingCourseIds,
-                                                      bool IsGroupNameExists)
+                                                      bool IsGroupNameExists,
+                                                      long courseId)
         {
-            if (fileLine.CourseId.Replace(" ", "") == "")
-            {
-               yield return "CourseId field shouldn't be empty.\n" +
-                    $"Problem was occured in col B, row {rowCounter}";
-            }
-
             if (fileLine.Name == "")
             {
                 yield return "Name field shouldn't be empty.\n" +
@@ -165,9 +160,9 @@ namespace CharlieBackend.Business.Services
                     $"Problem was occured in col D/E, row {rowCounter}.";
             }
 
-            if (!existingCourseIds.Contains(Convert.ToInt64(fileLine.CourseId)))
+            if (!existingCourseIds.Contains(courseId))
             {
-                yield return $"Course with id {fileLine.CourseId} doesn't exist.\n" +
+                yield return $"Course with id {courseId} doesn't exist.\n" +
                    $"Problem was occured in col B, row {rowCounter}.";
             }
 
@@ -180,10 +175,9 @@ namespace CharlieBackend.Business.Services
 
         private bool IsEndOfFile(int rowCounter, IXLWorksheet sheet)
         {
-            return (sheet.Cell($"B{rowCounter}").Value.ToString() == "")
-                && (sheet.Cell($"C{rowCounter}").Value.ToString() == "")
-                && (sheet.Cell($"D{rowCounter}").Value.ToString() == "")
-                && (sheet.Cell($"E{rowCounter}").Value.ToString() == "");
+            return (sheet.Cell($"A{rowCounter}").Value.ToString() == "")
+                && (sheet.Cell($"B{rowCounter}").Value.ToString() == "")
+                && (sheet.Cell($"C{rowCounter}").Value.ToString() == "");
         }
 
         public Stream ConvertCsvToExcel(MemoryStream stream, string worksheetName)

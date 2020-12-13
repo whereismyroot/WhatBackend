@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using CharlieBackend.Core.FileModels;
 using Microsoft.AspNetCore.Authorization;
 using Swashbuckle.AspNetCore.Annotations;
-using CharlieBackend.Core.Models.ResultModel;
 using CharlieBackend.Business.Services.Interfaces;
 
 namespace CharlieBackend.Api.Controllers
@@ -41,11 +40,11 @@ namespace CharlieBackend.Api.Controllers
         /// <response code="HTTP: 400, API: 4">File validation error</response>
         [SwaggerResponse(200, type: typeof(List<StudentGroupFile>))]
         [Authorize(Roles = "Mentor, Secretary, Admin")]
-        [Route("groups")]
+        [Route("groups/{courseId}")]
         [HttpPost]
-        public async Task<ActionResult> ImportGroupDataFromFile(IFormFile file)
+        public async Task<ActionResult> ImportGroupDataFromFile(long courseId, IFormFile file)
         {
-            var listOfImportedStudentGroups = await _studentGroupImportService.ImportFileAsync(file);
+            var listOfImportedStudentGroups = await _studentGroupImportService.ImportFileAsync(courseId, file);
 
             return listOfImportedStudentGroups.ToActionResult();
         }
