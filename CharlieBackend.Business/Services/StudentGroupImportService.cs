@@ -15,6 +15,7 @@ using CharlieBackend.Core.Models.ResultModel;
 using CharlieBackend.Business.Services.Interfaces;
 using CharlieBackend.Data.Repositories.Impl.Interfaces;
 using System.Data;
+using CharlieBackend.Core.DTO.StudentGroups;
 
 namespace CharlieBackend.Business.Services
 {
@@ -23,12 +24,20 @@ namespace CharlieBackend.Business.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
         private readonly INotificationService _notificationService;
+        private readonly IStudentGroupService _studentGroupService;
+        private readonly ICourseService _courseService;
 
-        public StudentGroupImportService(IUnitOfWork unitOfWork, IMapper mapper, INotificationService notificationService)
+        public StudentGroupImportService(IUnitOfWork unitOfWork,
+                                         IMapper mapper, 
+                                         INotificationService notificationService, 
+                                         IStudentGroupService studentGroupService,
+                                         ICourseService courseService)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
             _notificationService = notificationService;
+            _studentGroupService = studentGroupService;
+            _courseService = courseService;
         }
 
         public async Task<Result<List<StudentGroupFile>>> ImportFileAsync(long courseId, IFormFile uploadedFile)
@@ -74,7 +83,7 @@ namespace CharlieBackend.Business.Services
                                 .GetError(ErrorCode.ValidationError, string.Join("\n", errors));
                     }
 
-                    StudentGroup group = new StudentGroup
+                    CreateStudentGroupDto group = new CreateStudentGroupDto
                     {
                         CourseId = courseId,
                         Name = fileLine.Name,
@@ -83,7 +92,8 @@ namespace CharlieBackend.Business.Services
                     };
 
                     importedGroups.Add(fileLine);
-                    _unitOfWork.StudentGroupRepository.Add(group);
+                    //need to add validation (can return an error)
+                    await _studentGroupService.CreateStudentGroupAsync(group);
                     rowCounter++;
                 }
             }
@@ -96,6 +106,11 @@ namespace CharlieBackend.Business.Services
             }
 
             await _unitOfWork.CommitAsync();
+
+            var courseName = "Course name";
+            var startDate = DateTime.Now;
+
+            await _notificationService.CourseOpened(startDate, courseName);
 
             return Result<List<StudentGroupFile>>
                 .GetSuccess(_mapper.Map<List<StudentGroupFile>>(importedGroups));

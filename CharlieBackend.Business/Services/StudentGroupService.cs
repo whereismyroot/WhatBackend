@@ -81,7 +81,6 @@ namespace CharlieBackend.Business.Services
                     }
                 }
 
-
                 await _unitOfWork.CommitAsync();
 
                 return Result<StudentGroupDto>.GetSuccess(_mapper.Map<StudentGroupDto>(studentGroup));

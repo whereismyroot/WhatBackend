@@ -8,5 +8,7 @@ namespace WhatBackend.EmailRenderService.Services.Interfaces
         string GetAccountApprovedTemplate(AccountApprovedEvent message);
 
         string GetRegistrationSuccessTemplate(RegistrationSuccessEvent message);
+
+        string GetCourseOpenedTemplate(string message);
     }
 }

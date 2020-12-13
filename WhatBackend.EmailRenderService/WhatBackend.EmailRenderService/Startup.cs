@@ -29,6 +29,7 @@ namespace WhatBackend.EmailRenderService
             services.AddSingleton<IMessageTemplateService, MessageTemplateService>();
             services.AddSingleton<AccountApprovedHanlder>();
             services.AddSingleton<RegistrationSuccessHanlder>();
+            services.AddSingleton<CourseOpenedHanlder>();
             services.AddSingleton(RabbitHutch.CreateBus(Configuration.GetConnectionString("RabbitMQ")));
         }
 
@@ -51,8 +52,13 @@ namespace WhatBackend.EmailRenderService
                     .HandleAsync(message)));
 
             app.ApplicationServices.GetRequiredService<IBus>().SendReceive.Receive("RegistrationSuccess",
-                    x => x.Add<RegistrationSuccessEvent>(message => 
+                    x => x.Add<RegistrationSuccessEvent>(message =>
                     app.ApplicationServices.GetService<RegistrationSuccessHanlder>()
+                    .HandleAsync(message)));
+
+            app.ApplicationServices.GetRequiredService<IBus>().SendReceive.Receive("CourseOpened",
+                    x => x.Add<CourseOpenedEvent>(message =>
+                    app.ApplicationServices.GetService<CourseOpenedHanlder>()
                     .HandleAsync(message)));
 
             app.UseCors(builder =>
