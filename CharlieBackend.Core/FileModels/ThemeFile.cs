@@ -6,6 +6,6 @@ namespace CharlieBackend.Core.FileModels
 {
     public class ThemeFile
     {
-        public string Theme { get; set; }
+        public string ThemeName { get; set; }
     }
 }

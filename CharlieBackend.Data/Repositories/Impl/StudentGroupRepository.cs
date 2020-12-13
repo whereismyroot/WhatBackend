@@ -66,15 +66,9 @@ namespace CharlieBackend.Data.Repositories.Impl
 
         public StudentGroup SearchStudentGroup(long studentGroupId)
         {
-            foreach (var x in _applicationContext.StudentGroups)
-            {
-                if (x.Id == studentGroupId) 
-                {
-                    return x;
-                }
-            }
-
-            return null;
+            return _applicationContext.StudentGroups
+                   .Where(group => group.Id == studentGroupId)
+                   .FirstOrDefault();
         }
 
         public void UpdateManyToMany(IEnumerable<StudentOfStudentGroup> currentStudentsOfStudentGroup, 
