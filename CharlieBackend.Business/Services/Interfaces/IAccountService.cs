@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using CharlieBackend.Core.Entities;
 using CharlieBackend.Core.DTO.Account;
 using CharlieBackend.Core.Models.ResultModel;
-
+using Microsoft.AspNetCore.Http;
 
 namespace CharlieBackend.Business.Services.Interfaces
 {
@@ -32,5 +32,7 @@ namespace CharlieBackend.Business.Services.Interfaces
         Task<Result<ForgotPasswordDto>> GenerateForgotPasswordToken(ForgotPasswordDto forgotPassword);
 
         Task<Result<AccountDto>> ResetPasswordAsync(string guid, ResetPasswordDto resetPassword);
+
+        Task<bool> AddAvatar(long id, IFormFile avatar);
     }
 }

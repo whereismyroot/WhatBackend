@@ -141,6 +141,8 @@ namespace CharlieBackend.Data
                     .HasColumnName("forgot_token_gen_date")
                     .HasColumnType("datetime")
                     .HasComment("date of generation for users forgot password token");
+
+                entity.Property(e => e.AttachmentId).HasColumnName("attachment_id");
             });
 
             modelBuilder.Entity<Course>(entity =>

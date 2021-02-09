@@ -8,6 +8,8 @@ using CharlieBackend.Business.Helpers;
 using CharlieBackend.Core.Models.ResultModel;
 using CharlieBackend.Business.Services.Interfaces;
 using CharlieBackend.Data.Repositories.Impl.Interfaces;
+using Microsoft.AspNetCore.Http;
+using System.IO;
 
 namespace CharlieBackend.Business.Services
 {
@@ -238,6 +240,40 @@ namespace CharlieBackend.Business.Services
             await _unitOfWork.CommitAsync();
 
             return Result<AccountDto>.GetSuccess(_mapper.Map<AccountDto>(user));
+        }
+
+        public async Task<bool> AddAvatar(long id, IFormFile avatar)
+        {
+            var account = await _unitOfWork.AccountRepository.GetAccountCredentialsById(id);
+
+            if(account.AttachmentId.HasValue)
+            {
+                return false;
+            }
+            else
+            {
+                using (var stream = new FileStream(avatar.FileName, FileMode.Create))
+                {
+                    await avatar.CopyToAsync(stream);
+                }
+
+                Attachment attachment = new Attachment
+                {
+                    FileName = avatar.FileName,
+                    ContainerName = "none",
+                    CreatedByAccountId = account.Id;
+                };
+
+                _unitOfWork.AttachmentRepository.Add(attachment);
+
+                await _unitOfWork.CommitAsync();
+
+                account.AttachmentId = attachment.Id;
+
+                await _unitOfWork.CommitAsync();
+
+                return true;
+            }
         }
     }
 }

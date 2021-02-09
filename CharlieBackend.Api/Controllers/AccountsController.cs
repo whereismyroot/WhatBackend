@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Authorization;
 using Swashbuckle.AspNetCore.Annotations;
 using CharlieBackend.Business.Services.Interfaces;
 using CharlieBackend.Api.SwaggerExamples.AccountsController;
+using Microsoft.AspNetCore.Http;
 
 namespace CharlieBackend.Api.Controllers
 {
@@ -176,6 +177,12 @@ namespace CharlieBackend.Api.Controllers
             return createdAccountModel.ToActionResult();
         }
 
+        [Route("avatar")]
+        [HttpPost]
+        public async Task PostAvatar(long id, IFormFile avatar)
+        {
+            await _accountService.AddAvatar(id, avatar);
+        }
         /// <summary>
         /// Returns all registered accounts
         /// </summary>

@@ -30,5 +30,9 @@ namespace CharlieBackend.Core.Entities
         public virtual ICollection<Student> Students { get; set; }
 
         public virtual ICollection<Secretary> Secretaries { get; set; }
+
+        public long? AttachmentId { get; set; }
+
+        public virtual Attachment Attachment { get;set;}
     }
 }

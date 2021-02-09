@@ -27,5 +27,7 @@ namespace CharlieBackend.Core.DTO.Account
 
         [Required]
         public bool IsActive { get; set; }
+
+        public int AttachmentId { get; set; }
     }
 }
