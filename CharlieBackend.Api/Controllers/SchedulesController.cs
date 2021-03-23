@@ -11,6 +11,7 @@ using CharlieBackend.Core;
 using CharlieBackend.Core.Models.ResultModel;
 using Swashbuckle.AspNetCore.Annotations;
 using CharlieBackend.Core.Entities;
+using CharlieBackend.Core.DTO.Schedule.CreateScheduleDTO;
 
 namespace CharlieBackend.Api.Controllers
 {
@@ -131,6 +132,22 @@ namespace CharlieBackend.Api.Controllers
         public async Task<ActionResult<ScheduledEventDTO>> UpdateEventById(long scheduledEventID, [FromBody] UpdateScheduledEventDto request)
         {
             var foundSchedules = await _scheduleService.UpdateScheduledEventByID(scheduledEventID, request);
+
+            return foundSchedules.ToActionResult();
+        }
+
+        /// <summary>
+        /// Add new single schedule event
+        /// </summary>
+        /// <response code="200">Successful add of single schedule event</response>
+        /// <response code="HTTP: 400, API: 0">Can not create single schedule event due to wrong request data</response>
+        /// <response code="HTTP: 404, API: 3">Can not create single schedule event due to missing request data</response>
+        [SwaggerResponse(200, type: typeof(EventOccurrenceDTO))]
+        [Authorize(Roles = "Secretary, Admin")]
+        [HttpPost ("event1")]
+        public async Task<ActionResult<ScheduledEventDTO>> AddSingleEvent([FromBody] CreateScheduledEventDto request)
+        {
+            var foundSchedules = await _scheduleService.AddSingleScheduledEvent(request);
 
             return foundSchedules.ToActionResult();
         }
