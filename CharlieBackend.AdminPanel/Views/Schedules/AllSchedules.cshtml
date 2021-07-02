@@ -1,0 +1,41 @@
+﻿@model IList<CharlieBackend.AdminPanel.Models.Schedules.SchedulesViewModel>
+@{
+    Layout = "_Layout";
+}
+<div id="content-wrapper" class="d-flex flex-column">
+
+    <div id="content">
+
+        <div class="container-fluid">
+
+            <div class="card shadow mb-4">
+
+                <div class="card-body">
+                    <div class="table-responsive p-3" style="overflow-x:unset">
+                        <table class="table text-center table-hover" id="dataTable" width="100%" cellspacing="0">
+                            <thead>
+                                <tr class="thead-dark row">
+                                    <th class="col-4">StudentGroupId</th>
+                                    <th class="col-3">EventStart</th>
+                                    <th class="col-3">EventFinish</th>
+                                    <th class="col">Pattern</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+
+                                @foreach (var item in Model)
+                                {
+                                <tr class="row" id="activeStudentsRow">
+                                    <td class="col-4 text-truncate">@item.StudentGroupId</td>
+                                    <td class="col-3 text-truncate">@item.EventStart</td>
+                                    <td class="col-3 text-truncate">@item.EventFinish</td>
+                                    <td class="col">@item.Pattern</td>
+                                </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>

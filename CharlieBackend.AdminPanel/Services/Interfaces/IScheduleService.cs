@@ -1,4 +1,5 @@
 ﻿using CharlieBackend.AdminPanel.Models.Calendar;
+using CharlieBackend.AdminPanel.Models.Schedules;
 using CharlieBackend.Core.DTO.Schedule;
 using System;
 using System.Collections.Generic;
@@ -27,6 +28,6 @@ namespace CharlieBackend.AdminPanel.Services.Interfaces
         /// Method for obtaining a collection of all event occurrences.
         /// </summary>
         /// <returns>a collection of all event occurrences.</returns>
-        Task<IList<EventOccurrenceDTO>> GetAllEventOccurrences();
+        Task<IList<SchedulesViewModel>> GetAllEventOccurrences();
     }
 }

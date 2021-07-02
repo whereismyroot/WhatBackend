@@ -1,9 +1,11 @@
-﻿using CharlieBackend.AdminPanel.Services.Interfaces;
+﻿using CharlieBackend.AdminPanel.Models.Schedules;
+using CharlieBackend.AdminPanel.Services.Interfaces;
 using CharlieBackend.AdminPanel.Utils.Interfaces;
 using CharlieBackend.Core.DTO.Schedule;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace CharlieBackend.AdminPanel.Services
@@ -22,10 +24,10 @@ namespace CharlieBackend.AdminPanel.Services
             _scheduleApiEndpoints = options.Value.Urls.ApiEndpoints.Schedule;
         }
 
-        public async Task<IList<EventOccurrenceDTO>> GetAllEventOccurrences()
+        public async Task<IList<SchedulesViewModel>> GetAllEventOccurrences()
         {
             var result = await _apiUtil
-                .GetAsync<IList<EventOccurrenceDTO>>(_scheduleApiEndpoints.EventOccurrencesEndpoint);
+                .GetAsync<IList<SchedulesViewModel>>(_scheduleApiEndpoints.EventOccurrencesEndpoint);
 
             return result;
         }

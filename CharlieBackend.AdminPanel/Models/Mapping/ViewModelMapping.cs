@@ -2,6 +2,7 @@
 using CharlieBackend.AdminPanel.Models.Calendar;
 using CharlieBackend.AdminPanel.Models.Course;
 using CharlieBackend.AdminPanel.Models.Mentor;
+using CharlieBackend.AdminPanel.Models.Schedules;
 using CharlieBackend.AdminPanel.Models.StudentGroups;
 using CharlieBackend.AdminPanel.Models.Students;
 using CharlieBackend.Core.DTO.Course;
@@ -38,6 +39,8 @@ namespace CharlieBackend.AdminPanel.Models.Mapping
 
             CreateMap<CourseDto, CourseViewModel>();
 
+            CreateMap<EventOccurrenceDTO, SchedulesViewModel>();
+                //.ForMember(destination => destination.Pattern,config => config.MapFrom(x => x.StudentGroupId.Select(y => new StudentGroupViewModel { Id = y }).ToList()));
             #region Calendar ViewModels mappings
             CreateMap<CourseDto, CalendarCourseViewModel>();
             CreateMap<MentorDto, CalendarMentorViewModel>();
