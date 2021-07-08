@@ -41,6 +41,11 @@ namespace CharlieBackend.Business.Services.ScheduleServiceFolder.Helpers
                 error.Append(" Mentor does not exist");
             }
 
+            if ((await _unitOfWork.AccountRepository.GetAccountCredentialsById(request.Context.MentorID.Value)).IsActive == false)
+            {
+                error.Append(" Mentor is not active");
+            }
+
             if (request.Context.ThemeID.HasValue && !await _unitOfWork.ThemeRepository.IsEntityExistAsync(request.Context.ThemeID.Value))
             {
                 error.Append(" Theme does not exist");
