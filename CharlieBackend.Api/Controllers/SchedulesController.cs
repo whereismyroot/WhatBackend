@@ -94,7 +94,7 @@ namespace CharlieBackend.Api.Controllers
         /// <response code="200">Successful update of schedule</response>
         /// <response code="HTTP: 404, API: 3">Error, update data is missing</response>
         /// <response code="HTTP: 400, API: 0">Error, update data is wrong</response>
-        [SwaggerResponse(200, type: typeof(EventOccurrence))]
+        [SwaggerResponse(200, type: typeof(List<ScheduledEventDTO>))]
         [Authorize(Roles = "Secretary, Admin")]
         [HttpPut("events/updateRange")]
         public async Task<ActionResult<IList<ScheduledEventDTO>>> UpdateEventRange([FromBody] EventUpdateRangeDTO request)
