@@ -9,6 +9,7 @@ using CharlieBackend.Business.Services.Interfaces;
 using CharlieBackend.Data.Repositories.Impl.Interfaces;
 using CharlieBackend.Business.Services.FileServices;
 using CharlieBackend.Business.Services.ScheduleServiceFolder;
+using CharlieBackend.Business.Helpers;
 
 namespace CharlieBackend.Root
 {
@@ -63,7 +64,7 @@ namespace CharlieBackend.Root
             services.AddScoped<IScheduledEventHandlerFactory, ScheduledEventHandlerFactory>();
             services.AddScoped<IHomeworkStudentService, HomeworkStudentService>();
             services.AddScoped<IEventsService, EventsService>();
-
+            services.AddScoped<IJWTGenerator, JWTGenerator>();
             #endregion
         }
     }

@@ -1,4 +1,5 @@
 ﻿using CharlieBackend.Business.Services.Interfaces;
+using CharlieBackend.Business.Helpers;
 using CharlieBackend.Core.Entities;
 using Microsoft.AspNetCore.Http;
 using System;
@@ -29,7 +30,7 @@ namespace CharlieBackend.Business.Services
             {
                 if (_accountId == default)
                 {
-                    string accountIdString = GetClaimValue(claimType: "AccountId");
+                    string accountIdString = GetClaimValue(claimType: ClaimConstants.AccountClaim);
 
                     if (!long.TryParse(accountIdString, out _accountId))
                     {
@@ -56,7 +57,7 @@ namespace CharlieBackend.Business.Services
             {
                 if (_entityId == default)
                 {
-                    string entityIdString = GetClaimValue(claimType: "Id");
+                    string entityIdString = GetClaimValue(claimType: ClaimConstants.IdClaim);
 
                     if (!long.TryParse(entityIdString, out _entityId))
                     {
@@ -74,7 +75,7 @@ namespace CharlieBackend.Business.Services
             {
                 if (_email is null)
                 {
-                    _email = GetClaimValue(claimType: "Email");
+                    _email = GetClaimValue(claimType: ClaimConstants.EmailClaim);
 
                     if (_email is null)
                     {

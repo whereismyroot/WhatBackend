@@ -1,20 +1,15 @@
-﻿using System;
-using CharlieBackend.Core;
-using System.Security.Claims;
+﻿using CharlieBackend.Core;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
-using Microsoft.Extensions.Options;
 using CharlieBackend.Core.Entities;
 using Swashbuckle.AspNetCore.Filters;
-using Microsoft.IdentityModel.Tokens;
-using CharlieBackend.Business.Options;
-using System.IdentityModel.Tokens.Jwt;
 using CharlieBackend.Core.DTO.Account;
 using Microsoft.AspNetCore.Authorization;
 using Swashbuckle.AspNetCore.Annotations;
 using CharlieBackend.Business.Services.Interfaces;
 using CharlieBackend.Api.SwaggerExamples.AccountsController;
+using CharlieBackend.Business.Helpers;
 
 namespace CharlieBackend.Api.Controllers
 {
@@ -30,7 +25,7 @@ namespace CharlieBackend.Api.Controllers
         private readonly IStudentService _studentService;
         private readonly IMentorService _mentorService;
         private readonly ISecretaryService _secretaryService;
-        private readonly AuthOptions _authOptions;
+        private readonly IJWTGenerator _jWTGenerator;
         #endregion
         /// <summary>
         /// Account controller constructor
@@ -39,13 +34,13 @@ namespace CharlieBackend.Api.Controllers
                 IStudentService studentService,
                 IMentorService mentorService,
                 ISecretaryService secretaryService,
-                IOptions<AuthOptions> authOptions)
+                IJWTGenerator jWTGenerator)
         {
             _accountService = accountService;
             _studentService = studentService;
             _mentorService = mentorService;
             _secretaryService = secretaryService;
-            _authOptions = authOptions.Value;
+            _jWTGenerator = jWTGenerator;
         }
 
         /// <summary>
@@ -118,27 +113,8 @@ namespace CharlieBackend.Api.Controllers
                 return StatusCode(403, foundAccount.Email + " is registered and waiting assign.");
             }
 
-            var now = DateTime.UtcNow;
 
-            var jwt = new JwtSecurityToken(
-                    issuer: _authOptions.ISSUER,
-                    audience: _authOptions.AUDIENCE,
-                    notBefore: now,
-                    claims: new List<Claim>
-                    {
-                            new Claim(ClaimsIdentity.DefaultRoleClaimType,
-                                    foundAccount.Role.ToString()),
-                            new Claim("Id", entityId.ToString()),
-                            new Claim("Email", foundAccount.Email),
-                            new Claim("AccountId", foundAccount.Id.ToString())
-                    },
-                    expires: now.Add(TimeSpan.FromMinutes(_authOptions.LIFETIME)),
-                    signingCredentials:
-                            new SigningCredentials(
-                                    _authOptions.GetSymmetricSecurityKey(), SecurityAlgorithms.HmacSha256)
-                    );
-
-            var encodedJwt = new JwtSecurityTokenHandler().WriteToken(jwt);
+            var encodedJwt = _jWTGenerator.GenerateEncodedJWT(foundAccount);
 
             var response = new
             {
