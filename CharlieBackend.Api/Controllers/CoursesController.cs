@@ -50,7 +50,7 @@ namespace CharlieBackend.Api.Controllers
         /// 3. If IsActive is null – endpoint returns all courses. </param>
         /// <response code="200">Successful return of list of courses</response>
         [Authorize(Roles = "Admin, Mentor, Secretary, Student")]
-        [HttpGet("isActive")]
+        [HttpGet]
         public async Task<IList<CourseDto>> GetCourses(bool? isActive)
         {
             var courses = await _coursesService.GetCoursesAsync(isActive);
