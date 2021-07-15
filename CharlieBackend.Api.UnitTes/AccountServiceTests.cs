@@ -2,6 +2,7 @@
 using Xunit;
 using System;
 using AutoMapper;
+using FluentAssertions;
 using System.Threading.Tasks;
 using CharlieBackend.Core.Mapping;
 using CharlieBackend.Core.Entities;
@@ -19,18 +20,19 @@ namespace CharlieBackend.Api.UnitTest
     {
         private readonly IMapper _mapper;
         private readonly Mock<INotificationService> _notificationServiceMock;
+        private readonly Mock<IAccountRepository> _accountRepositoryMock;
 
         public AccountServiceTests()
         {
             _mapper = GetMapper(new ModelMappingProfile());
             _notificationServiceMock = new Mock<INotificationService>();
+            _accountRepositoryMock = new Mock<IAccountRepository>();
         }
 
         [Fact]
-        public async Task CreateAccountAsync()
+        public async Task CreateAccountAsync_ValidData_ShouldReturnAccount()
         {
             //Arrange
-            string accountExpectedEmail = "user@example.com";
             int accountExpectedId = 2;
 
             var successAccountModel = new CreateAccountDto()
@@ -42,6 +44,31 @@ namespace CharlieBackend.Api.UnitTest
                 ConfirmPassword = "Qqwerty3_"
             };
 
+            _accountRepositoryMock.Setup(x => x.Add(It.IsAny<Account>()))
+                .Callback<Account>(x => x.Id = accountExpectedId);
+
+            _unitOfWorkMock.Setup(x => x.AccountRepository).Returns(_accountRepositoryMock.Object);
+
+            var accountService = new AccountService(
+                _unitOfWorkMock.Object,
+                _mapper,
+                _notificationServiceMock.Object);
+
+            //Act
+            var successResult = await accountService.CreateAccountAsync(successAccountModel);
+
+            //Assert
+            successResult.Error.Should().BeNull();
+            successResult.Data.Id.Should().Be(accountExpectedId);
+            successResult.Data.Role.Should().Be(UserRole.NotAssigned);
+        }
+
+        [Fact]
+        public async Task CreateAccountAsync_EmailIstaken_ShouldThrowError()
+        {
+            //Arrange
+            string accountExpectedEmail = "user@example.com";
+
             var isEmailTakenAccountModel = new CreateAccountDto()
             {
                 Email = accountExpectedEmail,
@@ -51,25 +78,10 @@ namespace CharlieBackend.Api.UnitTest
                 ConfirmPassword = "Qqwerty3_"
             };
 
-            var existingAccount = new Account()
-            {
-                Id = accountExpectedId,
-                Email = accountExpectedEmail,
-                Role = UserRole.NotAssigned
-            };
-
-            var accountRepositoryMock = new Mock<IAccountRepository>();
-
-            accountRepositoryMock.Setup(x => x.Add(It.IsAny<Account>()))
-                .Callback<Account>(x => x = existingAccount);
-
-            accountRepositoryMock.Setup(x => x.Add(It.IsAny<Account>()))
-                .Callback<Account>(x => x.Id = accountExpectedId);
-
-            accountRepositoryMock.Setup(x => x.IsEmailTakenAsync(accountExpectedEmail))
+            _accountRepositoryMock.Setup(x => x.IsEmailTakenAsync(accountExpectedEmail))
                     .ReturnsAsync(true);
 
-            _unitOfWorkMock.Setup(x => x.AccountRepository).Returns(accountRepositoryMock.Object);
+            _unitOfWorkMock.Setup(x => x.AccountRepository).Returns(_accountRepositoryMock.Object);
 
             var accountService = new AccountService(
                 _unitOfWorkMock.Object,
@@ -78,20 +90,99 @@ namespace CharlieBackend.Api.UnitTest
 
             //Act
             var isEmailTakenResult = await accountService.CreateAccountAsync(isEmailTakenAccountModel);
-            var successResult = await accountService.CreateAccountAsync(successAccountModel);
 
             //Assert
-            Assert.Equal(ErrorCode.Conflict, isEmailTakenResult.Error.Code);
-
-            Assert.NotNull(successResult.Data);
-            Assert.Equal(accountExpectedId, successResult.Data.Id);
-            Assert.Equal(UserRole.NotAssigned, successResult.Data.Role);
+            isEmailTakenResult.Error.Code.Should().Be(ErrorCode.Conflict);
         }
 
         [Fact]
-        public async Task ChangePasswordAsync()
+        public async Task ChangePasswordAsync_ValidData_ShouldReturnAccount()
         {
             //Arrange
+            var salt = PasswordHelper.GenerateSalt();
+            var oldPassword = "mypass";
+            var newPassword = "changedPass";
+
+            var changePass = new ChangeCurrentPasswordDto
+            {
+                Email = "user@exmaple.com",
+                CurrentPassword = "mypass",
+                NewPassword = newPassword,
+                ConfirmNewPassword = newPassword
+            };
+
+            Account account = new Account
+            {
+                Id = 5,
+                IsActive = true,
+                Email = "user@exmaple.com",
+                Password = PasswordHelper.HashPassword(oldPassword, salt),
+                Salt = salt,
+                Role = UserRole.Mentor
+            };
+
+            AccountDto updatedAccountDto = new AccountDto
+            {
+                Id = 5,
+                Email = "user@exmaple.com",
+                IsActive = true,
+                Role = UserRole.Mentor
+            };
+
+            _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountSaltByEmail(account.Email))
+                    .ReturnsAsync(salt);
+
+            _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountCredentialsByEmailAsync(changePass.Email))
+                    .ReturnsAsync(account);
+
+            var accountService = new AccountService(
+                    _unitOfWorkMock.Object,
+                    _mapper,
+                    _notificationServiceMock.Object);
+
+            var successResult = await accountService.ChangePasswordAsync(changePass);
+
+            successResult.Data.Should().BeEquivalentTo(updatedAccountDto);
+        }
+
+        [Fact]
+        public async Task ChangePasswordAsync_notExistAccount_ShouldReturnError()
+        {
+            //Arrange
+            var salt = PasswordHelper.GenerateSalt();
+            var oldPassword = "mypass";
+
+            Account account = new Account
+            {
+                Id = 5,
+                IsActive = true,
+                Email = "user@exmaple.com",
+                Password = PasswordHelper.HashPassword(oldPassword, salt),
+                Salt = salt,
+                Role = UserRole.Mentor
+            };
+
+            var notExistDto = new ChangeCurrentPasswordDto
+            {
+                Email = "notExist@exmaple.com"
+            };
+
+            _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountSaltByEmail(account.Email))
+                    .ReturnsAsync(salt);
+
+            var accountService = new AccountService(
+                    _unitOfWorkMock.Object,
+                    _mapper,
+                    _notificationServiceMock.Object);
+
+            var notExistAccount = await accountService.ChangePasswordAsync(notExistDto);
+
+            notExistAccount.Error.Code.Should().Be(ErrorCode.NotFound);
+        }
+
+        [Fact]
+        public async Task ChangePasswordAsync_WrongPassword_ShouldReturnError()
+        {
             var salt = PasswordHelper.GenerateSalt();
             var oldPassword = "mypass";
             var newPassword = "changedPass";
@@ -106,6 +197,14 @@ namespace CharlieBackend.Api.UnitTest
                 Role = UserRole.Mentor
             };
 
+            var wrongPasswordDto = new ChangeCurrentPasswordDto
+            {
+                Email = "user@exmaple.com",
+                CurrentPassword = "wrongPassword",
+                NewPassword = newPassword,
+                ConfirmNewPassword = newPassword
+            };
+
             var changePass = new ChangeCurrentPasswordDto
             {
                 Email = "user@exmaple.com",
@@ -114,25 +213,37 @@ namespace CharlieBackend.Api.UnitTest
                 ConfirmNewPassword = newPassword
             };
 
-            AccountDto updatedAccountDto = new AccountDto
+            var accountService = new AccountService(
+                    _unitOfWorkMock.Object,
+                    _mapper,
+                    _notificationServiceMock.Object);
+
+            _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountSaltByEmail(account.Email))
+                   .ReturnsAsync(salt);
+
+            _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountCredentialsByEmailAsync(changePass.Email))
+                    .ReturnsAsync(account);
+
+            var wrongPassword = await accountService.ChangePasswordAsync(wrongPasswordDto);
+
+            wrongPassword.Error.Code.Should().Be(ErrorCode.Conflict);
+        }
+
+        [Fact]
+        public async Task ChangePasswordAsync_AccWithoutSalt_ShouldReturnError()
+        {
+            //Arrange
+            var salt = PasswordHelper.GenerateSalt();
+            var oldPassword = "mypass";
+
+            Account account = new Account
             {
                 Id = 5,
-                Email = "user@exmaple.com",
                 IsActive = true,
-                Role = UserRole.Mentor
-            };
-
-            var notExistDto = new ChangeCurrentPasswordDto
-            {
-                Email = "notExist@exmaple.com"
-            };
-
-            var wrongPasswordDto = new ChangeCurrentPasswordDto
-            {
                 Email = "user@exmaple.com",
-                CurrentPassword = "wrongPassword",
-                NewPassword = newPassword,
-                ConfirmNewPassword = newPassword
+                Password = PasswordHelper.HashPassword(oldPassword, salt),
+                Salt = salt,
+                Role = UserRole.Mentor
             };
 
             var withoutSaltDto = new ChangeCurrentPasswordDto
@@ -153,9 +264,6 @@ namespace CharlieBackend.Api.UnitTest
             _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountSaltByEmail(account.Email))
                     .ReturnsAsync(salt);
 
-            _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountCredentialsByEmailAsync(changePass.Email))
-                    .ReturnsAsync(account);
-
             _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountCredentialsByEmailAsync(accountWithoutSalt.Email))
                     .ReturnsAsync(accountWithoutSalt);
 
@@ -165,29 +273,44 @@ namespace CharlieBackend.Api.UnitTest
                     _notificationServiceMock.Object);
 
             //Act
-            var notExistAccount = await accountService.ChangePasswordAsync(notExistDto);
-            var successResult = await accountService.ChangePasswordAsync(changePass);
-            var wrongPassword = await accountService.ChangePasswordAsync(wrongPasswordDto);
             var accWithoutSalt = await accountService.ChangePasswordAsync(withoutSaltDto);
 
             //Assert
-            Assert.NotNull(notExistDto);
-            Assert.NotNull(successResult);
-            Assert.NotNull(wrongPassword);
-            Assert.NotNull(accWithoutSalt);
-
-            Assert.Equal(ErrorCode.NotFound, notExistAccount.Error.Code);
-            Assert.Equal(ErrorCode.Conflict, wrongPassword.Error.Code);
             Assert.Equal(ErrorCode.InternalServerError, accWithoutSalt.Error.Code);
-
-            Assert.Equal(updatedAccountDto.Id, successResult.Data.Id);
-            Assert.Equal(updatedAccountDto.Email, successResult.Data.Email);
-            Assert.Equal(updatedAccountDto.IsActive, successResult.Data.IsActive);
-            Assert.Equal(updatedAccountDto.Role, successResult.Data.Role);
         }
 
         [Fact]
-        public async Task GenerateForgotPasswordToken()
+        public async Task GenerateForgotPasswordToken_ValidData()
+        {
+            //Arrange
+            var successForgotPasswordDto = new ForgotPasswordDto
+            {
+                Email = "example@example.com",
+                FormUrl = "https://frontenddomain/account/resetPassword"
+            };
+
+            var successUserAccount = new Account
+            {
+                Email = "example@example.com"
+            };
+
+            var accountService = new AccountService(
+                        _unitOfWorkMock.Object,
+                        _mapper,
+                        _notificationServiceMock.Object);
+
+            _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountCredentialsByEmailAsync(successForgotPasswordDto.Email))
+                    .ReturnsAsync(successUserAccount);
+
+            //Act
+            var successResult = await accountService.GenerateForgotPasswordToken(successForgotPasswordDto);
+
+            //Assert
+            successResult.Data.Should().BeEquivalentTo(successForgotPasswordDto);
+        }
+
+        [Fact]
+        public async Task GenerateForgotPasswordToken_userDoesntExist_ShouldReturnError()
         {
             //Arrange
             var successForgotPasswordDto = new ForgotPasswordDto
@@ -216,27 +339,19 @@ namespace CharlieBackend.Api.UnitTest
                     _notificationServiceMock.Object);
 
             //Act
-            var successResult = await accountService.GenerateForgotPasswordToken(successForgotPasswordDto);
             var userDoesntExistResult = await accountService.GenerateForgotPasswordToken(userDoesntExistDto);
 
             //Assert
-            Assert.NotNull(successResult);
-            Assert.NotNull(userDoesntExistResult);
-
             Assert.Equal(ErrorCode.NotFound, userDoesntExistResult.Error.Code);
-
-            Assert.Equal(successForgotPasswordDto.Email, successResult.Data.Email);
-            Assert.Equal(successForgotPasswordDto.FormUrl, successResult.Data.FormUrl);
         }
 
+
         [Fact]
-        public async Task ResetPasswordAsync()
+        public async Task ResetPasswordAsync_ValidData_ShouldReturnAccount() 
         {
             //Arrange
             var userGuid = Guid.NewGuid().ToString();
             var forgotPasswordGenDate = DateTime.Now;
-            var userWithoutTokenDateGuid = Guid.NewGuid().ToString();
-            var expiredDate = DateTime.Now.AddDays(-1);
 
             var validUser = new Account
             {
@@ -263,9 +378,119 @@ namespace CharlieBackend.Api.UnitTest
                 Role = UserRole.Mentor
             };
 
+            _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountCredentialsByEmailAsync(successResetPasswordDto.Email))
+                    .ReturnsAsync(validUser);
+
+            var accountService = new AccountService(
+                    _unitOfWorkMock.Object,
+                    _mapper,
+                    _notificationServiceMock.Object);
+
+            //Act
+            var successResult = await accountService.ResetPasswordAsync(userGuid.ToString(), successResetPasswordDto);
+
+            //Assert
+            successResult.Data.Should().BeEquivalentTo(successAccountDto);
+        }
+
+        [Fact]
+        public async Task ResetPasswordAsync_UserDoesntExist_ShouldReturnError() 
+        {
+            var userGuid = Guid.NewGuid().ToString();
+            var forgotPasswordGenDate = DateTime.Now;
+
+            var validUser = new Account
+            {
+                Id = 5,
+                Email = "example@example.com",
+                IsActive = true,
+                ForgotPasswordToken = userGuid,
+                ForgotTokenGenDate = forgotPasswordGenDate,
+                Role = UserRole.Mentor
+            };
+
             var userDoesntExist = new ResetPasswordDto
             {
                 Email = "dontexist@example.com"
+            };
+
+            var successResetPasswordDto = new ResetPasswordDto
+            {
+                Email = "example@example.com",
+                NewPassword = "bob228",
+                ConfirmNewPassword = "bob228"
+            };
+
+            _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountCredentialsByEmailAsync(successResetPasswordDto.Email))
+                    .ReturnsAsync(validUser);
+
+            var accountService = new AccountService(
+                    _unitOfWorkMock.Object,
+                    _mapper,
+                    _notificationServiceMock.Object);
+
+            //Act
+            var userDoesntExistResult = await accountService.ResetPasswordAsync(userGuid, userDoesntExist);
+
+            //Assert
+            Assert.Equal(ErrorCode.NotFound, userDoesntExistResult.Error.Code);
+        }
+
+        [Fact]
+        public async Task ResetPasswordAsync_InvalidFormToken() 
+        {
+            //Arrange
+            var userGuid = Guid.NewGuid().ToString();
+            var forgotPasswordGenDate = DateTime.Now;
+
+            var validUser = new Account
+            {
+                Id = 5,
+                Email = "example@example.com",
+                IsActive = true,
+                ForgotPasswordToken = userGuid,
+                ForgotTokenGenDate = forgotPasswordGenDate,
+                Role = UserRole.Mentor
+            };
+
+            var successResetPasswordDto = new ResetPasswordDto
+            {
+                Email = "example@example.com",
+                NewPassword = "bob228",
+                ConfirmNewPassword = "bob228"
+            };
+
+            _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountCredentialsByEmailAsync(successResetPasswordDto.Email))
+                    .ReturnsAsync(validUser);
+
+            var accountService = new AccountService(
+                    _unitOfWorkMock.Object,
+                    _mapper,
+                    _notificationServiceMock.Object);
+
+            //Act
+            var invalidFormToken = await accountService.ResetPasswordAsync(Guid.NewGuid().ToString(), successResetPasswordDto);
+
+            //Assert
+            invalidFormToken.Error.Code.Should().Be(ErrorCode.ValidationError);
+        }
+
+        [Fact]
+        public async Task ResetPasswordAsync_expiredTokenDate_ShouldReturnError()
+        {
+            //Arrange
+            var userGuid = Guid.NewGuid().ToString();
+            var forgotPasswordGenDate = DateTime.Now;
+            var expiredDate = DateTime.Now.AddDays(-1);
+
+            var validUser = new Account
+            {
+                Id = 5,
+                Email = "example@example.com",
+                IsActive = true,
+                ForgotPasswordToken = userGuid,
+                ForgotTokenGenDate = forgotPasswordGenDate,
+                Role = UserRole.Mentor
             };
 
             var userWithTokenDateExpired = new Account
@@ -280,8 +505,6 @@ namespace CharlieBackend.Api.UnitTest
                 Email = "expiredDate@example.com"
             };
 
-            _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountCredentialsByEmailAsync(successResetPasswordDto.Email))
-                    .ReturnsAsync(validUser);
             _unitOfWorkMock.Setup(x => x.AccountRepository.GetAccountCredentialsByEmailAsync(userWithTokenDateExpiredDto.Email))
                     .ReturnsAsync(userWithTokenDateExpired);
 
@@ -291,25 +514,10 @@ namespace CharlieBackend.Api.UnitTest
                     _notificationServiceMock.Object);
 
             //Act
-            var userDoesntExistResult = await accountService.ResetPasswordAsync(userGuid, userDoesntExist);
-            var invalidFormToken = await accountService.ResetPasswordAsync(Guid.NewGuid().ToString(), successResetPasswordDto);
             var expiredTokenDate = await accountService.ResetPasswordAsync(userGuid, userWithTokenDateExpiredDto);
-            var successResult = await accountService.ResetPasswordAsync(userGuid.ToString(), successResetPasswordDto);
 
             //Assert
-            Assert.NotNull(userDoesntExistResult);
-            Assert.NotNull(invalidFormToken);
-            Assert.NotNull(successResult);
-            Assert.NotNull(expiredTokenDate);
-
-            Assert.Equal(ErrorCode.NotFound, userDoesntExistResult.Error.Code);
-            Assert.Equal(ErrorCode.ValidationError, invalidFormToken.Error.Code);
-            Assert.Equal(ErrorCode.ForgotPasswordExpired, expiredTokenDate.Error.Code);
-
-            Assert.Equal(successAccountDto.Id, successResult.Data.Id);
-            Assert.Equal(successAccountDto.Email, successResult.Data.Email);
-            Assert.Equal(successAccountDto.IsActive, successResult.Data.IsActive);
-            Assert.Equal(successAccountDto.Role, successResult.Data.Role);
+            expiredTokenDate.Error.Code.Should().Be(ErrorCode.ForgotPasswordExpired);
         }
     }
 }
