@@ -17,35 +17,53 @@ namespace CharlieBackend.AdminPanel.Services
     public class MentorService : IMentorService
     {
         private readonly IApiUtil _apiUtil;
+        private readonly MentorsApiEndpoints _mentorsApiEndpoints;
+        private readonly CoursesApiEndpoints _coursesApiEndpoints;
+        private readonly StudentGroupsApiEndpoints _studentGroupsApiEndpoints;
 
-        public MentorService(IApiUtil apiUtil)
+        public MentorService(IApiUtil apiUtil, IOptions<ApplicationSettings> options)
         {
-            _apiUtil = apiUtil;    
+            _apiUtil = apiUtil;
+
+            _mentorsApiEndpoints = options.Value.Urls.ApiEndpoints.Mentors;
+            _coursesApiEndpoints = options.Value.Urls.ApiEndpoints.Courses;
+            _studentGroupsApiEndpoints = options.Value.Urls.ApiEndpoints.StudentGroups;
         }
 
         public async Task<MentorDto> AddMentorAsync(long id)
         {
+            var addMentorEndpoint = string
+                .Format(_mentorsApiEndpoints.AddMentorEndpoint, id);
+
             return await
-                _apiUtil.CreateAsync<MentorDto>($"api/mentors/{id}", null);
+                _apiUtil.CreateAsync<MentorDto>(addMentorEndpoint, null);
         }
 
         public async Task<bool> DisableMentorAsync(long id)
         {
-            return await _apiUtil.DeleteAsync<bool>($"api/mentors/{id}");
+            var disableMentorEndpoint = string
+                .Format(_mentorsApiEndpoints.DisableMentorEndpoint, id);
+
+            return await _apiUtil.DeleteAsync<bool>(disableMentorEndpoint);
         }
 
         public async Task<bool> EnableMentorAsync(long id)
         {
-            return await _apiUtil.EnableAsync<bool>($"api/mentors/{id}");
+            var enableMentorEndpoint = string
+                .Format(_mentorsApiEndpoints.EnableMentorEndpoint, id);
+
+            return await _apiUtil.EnableAsync<bool>(enableMentorEndpoint);
         }
 
         public async Task<IList<MentorViewModel>> GetAllMentorsAsync()
         {
-            var allMentors = await 
-                _apiUtil.GetAsync<IList<MentorViewModel>>($"api/mentors");
+            var getAllMentorsEndpoint = _mentorsApiEndpoints.GetAllMentorsEndpoint;
+            var activeMentorEndpoint = _mentorsApiEndpoints.ActiveMentorEndpoint;
 
+            var allMentors = await 
+                _apiUtil.GetAsync<IList<MentorViewModel>>(getAllMentorsEndpoint);
             var activeMentors = await 
-                _apiUtil.GetAsync<IList<MentorViewModel>>($"api/mentors/active");
+                _apiUtil.GetAsync<IList<MentorViewModel>>(activeMentorEndpoint);
 
             foreach (var mentor in allMentors)
             {
@@ -57,9 +75,14 @@ namespace CharlieBackend.AdminPanel.Services
 
         public async Task<MentorEditViewModel> GetMentorByIdAsync(long id)
         {
-            var coursesTask = _apiUtil.GetAsync<IList<CourseViewModel>>($"api/courses/isActive");
-            var studentGroupTask = _apiUtil.GetAsync<IList<StudentGroupViewModel>>($"api/student_groups");
-            var mentor = await _apiUtil.GetAsync<MentorEditViewModel>($"api/mentors/{id}");
+            var getAllCoursesEndpoint = _coursesApiEndpoints.GetAllCoursesEndpoint;
+            var getAllStudentGroupsEndpoint = _studentGroupsApiEndpoints.GetAllStudentGroupsEndpoint;
+            var getMentorEndpoint = string
+                .Format(_mentorsApiEndpoints.GetMentorEndpoint, id);
+
+            var coursesTask = _apiUtil.GetAsync<IList<CourseViewModel>>(getAllCoursesEndpoint);
+            var studentGroupTask = _apiUtil.GetAsync<IList<StudentGroupViewModel>>(getAllStudentGroupsEndpoint);
+            var mentor = await _apiUtil.GetAsync<MentorEditViewModel>(getMentorEndpoint);
 
             mentor.AllGroups = await studentGroupTask;
             mentor.AllCourses = await coursesTask;
@@ -69,8 +92,11 @@ namespace CharlieBackend.AdminPanel.Services
 
         public async Task<UpdateMentorDto> UpdateMentorAsync(long id, UpdateMentorDto UpdateDto)
         {
+            var updateMentorEndpoint = string
+               .Format(_mentorsApiEndpoints.UpdateMentorEndpoint, id);
+
             return await 
-                _apiUtil.PutAsync($"api/mentors/{id}", UpdateDto);
+                _apiUtil.PutAsync(updateMentorEndpoint, UpdateDto);
         }
     }
 }

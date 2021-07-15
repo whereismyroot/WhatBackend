@@ -1,0 +1,106 @@
+﻿@model IEnumerable<CharlieBackend.AdminPanel.Models.EventOccurrence.EventOccurrenceViewModel>
+@{
+    Layout = "_Layout";
+}
+<div class="fixed-bottom ml-4" style="left:90%; right:50%; bottom:8%;">
+    <a asp-action="CreateEventOccurrence" asp-controller="EventOccurrence" class="btn btn-lg btn-success btn-circle">
+        <i class="fas fa-plus"></i>
+    </a>
+</div>
+
+<div id="content-wrapper" class="d-flex flex-column">
+    <div class="container-fluid">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <div class="row">
+                    <h6 class="m-2 font-weight-bold text-primary">Event Occurrences</h6>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive p-3" style="overflow-x:unset">
+                    <table class="table text-center table-hover" id="dataTable" width="100%" cellspacing="0">
+                        <thead>
+                            <tr class="thead-dark row">
+                                <th class="col-1">Id</th>
+                                <th class="col-2">Student group id</th>
+                                <th class="col-2">Storage</th>
+                                <th class="col-3">EventStart</th>
+                                <th class="col-3">EventFinish</th>
+                                <th class="col-1">Control</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model)
+                            {
+                                <tr class="row">
+                                    <td class="col-1">@item.Id</td>
+                                    <td class="col-2">@item.StudentGroupId</td>
+                                    <td class="col-2">@item.Storage</td>
+                                    <td class="col-3">@item.EventStart</td>
+                                    <td class="col-3">@item.EventFinish</td>
+                                    <td class="col-1">
+                                        <div class="dropdown">
+                                            <button class="btn btn-outline-secondar dropdown-toggle"
+                                                    type="button" id="dropdownMenuButton" data-toggle="dropdown"
+                                                    aria-haspopup="true" aria-expanded="false">
+                                                <i class="fas fa-cog"></i>
+                                            </button>
+                                            <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                                                <a class="dropdown-item text-dark" asp-action="PrepareEventOccurrenceForUpdate" asp-controller="EventOccurrence" asp-route-id="@item.Id">
+                                                    <i class="fas fa-pen"></i>
+                                                    <span>Edit </span>
+                                                </a>
+                                                <a class="dropdown-item text-dark js-delete-event-occurrence" data-toggle="modal" data-target="#deleteEventOccurrenceModalWindow" data-item-id="@item.Id">
+                                                    <i class="fas fa-pen"></i>
+                                                    <span>Delete </span>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete event occurrence modal window-->
+<div class="modal fade" id="deleteEventOccurrenceModalWindow" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Delete event occurrence?</h5>
+                <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">×</span>
+                </button>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
+                <a class="btn btn-primary" id="confirmDeleteEventOccurrence" href="">Confirm</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts{
+    <script type="text/javascript">
+        var routeForDeleteEventOccurrence = "/EventOccurrence/DeleteEventOccurrence/";
+
+        var deleteEventOccurrenceId = null;
+
+        $(document).on("click", ".js-delete-event-occurrence", function (e) {
+
+            e.preventDefault();
+
+            var _self = $(this);
+
+            deleteEventOccurrenceId = _self.data('item-id');
+
+            $("#confirmDeleteEventOccurrence").attr("href", routeForDeleteEventOccurrence + deleteEventOccurrenceId);
+
+        });
+    </script>
+}

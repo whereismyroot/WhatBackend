@@ -1,0 +1,220 @@
+﻿@model CharlieBackend.Core.DTO.Schedule.CreateScheduleDto
+
+@{
+    Layout = "_Layout";
+}
+
+<div id="content-wrapper" class="d-flex flex-row  justify-content-center">
+
+    <div class="container mt-3 col-5">
+
+        <h1 class="h3 mb-2 text-gray-800">Update event occurrence</h1>
+
+        <div class="card shadow mb-4">
+
+            <div class="modal-body">
+                <form method="post" asp-action="UpdateEventOccurrence" asp-controller="EventOccurrence" asp-route-id="@ViewBag.CurrentId">
+
+                    <div class="form-group">
+                        <label>Student Group </label>
+                        <select class="custom-select" asp-for="Context.GroupID" size="1">
+
+                            @if (@ViewBag.EventOccurrence.AllStudentGroups != null)
+                            {
+                                @foreach (var item in @ViewBag.EventOccurrence.AllStudentGroups)
+                                {
+
+                                    <option value="@item.Id">@item.Name</option>
+                                }
+                            }
+                            else
+                            {
+                                <option value="@null">null</option>
+                            }
+
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Mentor </label>
+                        <select class="custom-select" asp-for="Context.MentorID" size="1">
+
+                            @if (@ViewBag.EventOccurrence.AllMentors != null)
+                            {
+                                @foreach (var item in @ViewBag.EventOccurrence.AllMentors)
+                                {
+                                    <option value="@item.Id">
+                                        @item.FirstName
+                                        @item.LastName
+                                    </option>
+                                }
+                            }
+                            else
+                            {
+                                <option value="@null">null</option>
+                            }
+
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Theme </label>
+                        <select class="custom-select" asp-for="Context.ThemeID" size="1">
+
+                            @if (@ViewBag.EventOccurrence.AllThemes != null)
+                            {
+                                @foreach (var item in @ViewBag.EventOccurrence.AllThemes)
+                                {
+                                    <option value="@item.Id">
+                                        @item.Name
+                                    </option>
+                                }
+                            }
+                            else
+                            {
+                                <option value="@null">null</option>
+                            }
+
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Start date</label>
+                        <input type="date" min="1900-01-01" max="2100-12-31"
+                               value="@DateTime.Now.ToString("yyyy-MM-dd")" class="form-control" asp-for="Range.StartDate">
+                    </div>
+
+                    <div class="form-group">
+                        <label>End date</label>
+                        <input type="date" min="1000-01-01" max="3000-12-31" class="form-control"
+                               value="@DateTime.Now.AddMonths(3).ToString("yyyy-MM-dd")" asp-for="Range.FinishDate">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Pattern type</label>
+                        <select class="custom-select" onchange="UpdateForm(this.value)" asp-for="Pattern.Type" size="1">
+                            <option value="0">
+                                Daily
+                            </option>
+                            <option value="1">
+                                Weekly
+                            </option>
+                            <option value="2">
+                                AbsoluteMonthly
+                            </option>
+                            <option value="3">
+                                RelativeMonthly
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Interval</label>
+                        <input type="number" min="1" max="30" class="form-control"
+                               value="1" asp-for="Pattern.Interval">
+                    </div>
+
+
+                    <div class="form-group" id="days-of-week" hidden="hidden">
+                        <label>Days of week type</label>
+                        <select class="custom-select" asp-for="Pattern.DaysOfWeek" size="7">
+                            <option value="0">
+                                Sunday
+                            </option>
+                            <option value="1">
+                                Monday
+                            </option>
+                            <option value="2">
+                                Tuesday
+                            </option>
+                            <option value="3">
+                                Wednesday
+                            </option>
+                            <option value="4">
+                                Thursday
+                            </option>
+                            <option value="5">
+                                Friday
+                            </option>
+                            <option value="6">
+                                Saturday
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="pattern-index" hidden="hidden">
+                        <label>Pattern index</label>
+                        <select class="custom-select" asp-for="Pattern.Index" size="1">
+                            <option value="0">
+                                Undefined
+                            </option>
+                            <option value="1">
+                                First
+                            </option>
+                            <option value="2">
+                                Second
+                            </option>
+                            <option value="3">
+                                Third
+                            </option>
+                            <option value="4">
+                                Fourth
+                            </option>
+                            <option value="5">
+                                Last
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="form-group dates" id="dates" hidden="hidden">
+                        <label>Days of month </label>
+                        <select class="custom-select" asp-for="Pattern.Dates" size="5">
+                            @for (int i = 1; i <= 31; i++)
+                            {
+                                <option value="@i">
+                                    @i
+                                </option>
+                            }
+
+                        </select>
+                    </div>
+
+
+                    <div class="mt-3">
+                        <a class="btn btn-secondary" asp-action="AllEventOccurrences" asp-controller="EventOccurrence">Close</a>
+                        <button type="submit" class="btn btn-primary">Update</button>
+                    </div>
+
+                </form>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@section Scripts{
+    <script type="text/javascript">
+        function UpdateForm(value) {
+            if (value == 0) {
+                document.getElementById("dates").hidden = true;
+                document.getElementById("days-of-week").hidden = true;
+                document.getElementById("pattern-index").hidden = true;
+            }
+            else if (value == 1) {
+                document.getElementById("dates").hidden = true;
+                document.getElementById("days-of-week").hidden = false;
+                document.getElementById("pattern-index").hidden = true;
+            }
+            else if (value == 2) {
+                document.getElementById("dates").hidden = false;
+                document.getElementById("days-of-week").hidden = true;
+                document.getElementById("pattern-index").hidden = true;
+            }
+            else if (value == 3) {
+                document.getElementById("dates").hidden = true;
+                document.getElementById("days-of-week").hidden = false;
+                document.getElementById("pattern-index").hidden = false;
+            }
+        }
+    </script>
+}

@@ -13,34 +13,46 @@ namespace CharlieBackend.AdminPanel.Services
     public class ThemeService : IThemeService
     {
         private readonly IApiUtil _apiUtil;
+        private readonly ThemesApiEndpoints _themesApiEndpoints;
 
-        public ThemeService(IApiUtil apiUtil)
+        public ThemeService(IApiUtil apiUtil, IOptions<ApplicationSettings> options)
         {
             _apiUtil = apiUtil;
+            _themesApiEndpoints = options.Value.Urls.ApiEndpoints.Themes;
         }
 
         public async Task DeleteTheme(long id)
         {
+            var deleteThemeEndpoint = string
+                .Format(_themesApiEndpoints.DeleteThemeEndpoint, id);
+
             await
-                _apiUtil.DeleteAsync<ThemeViewModel>($"api/themes/{id}");
+                _apiUtil.DeleteAsync<ThemeViewModel>(deleteThemeEndpoint);
         }
 
         public async Task UpdateTheme(long id, UpdateThemeDto UpdateDto)
         {
+            var updateThemeEndpoint = string
+                .Format(_themesApiEndpoints.UpdateThemeEndpoint, id);
+
             await
-                _apiUtil.PutAsync<UpdateThemeDto>($"api/themes/{id}", UpdateDto);
+                _apiUtil.PutAsync<UpdateThemeDto>(updateThemeEndpoint, UpdateDto);
         }
 
         public async Task<IList<ThemeViewModel>> GetAllThemesAsync()
         {
+            var getAllThemesEndpoint = _themesApiEndpoints.GetAllThemesEndpoint;
+
             return await
-                _apiUtil.GetAsync<IList<ThemeViewModel>>($"api/themes");
+                _apiUtil.GetAsync<IList<ThemeViewModel>>(getAllThemesEndpoint);
         }
 
         public async Task AddThemeAsync(CreateThemeDto themeDto)
         {
+            var addThemeEndpoint = _themesApiEndpoints.AddThemeEndpoint;
+
             await
-                _apiUtil.CreateAsync<CreateThemeDto>($"api/themes", themeDto);
+                _apiUtil.CreateAsync<CreateThemeDto>(addThemeEndpoint, themeDto);
         }
     }
 }

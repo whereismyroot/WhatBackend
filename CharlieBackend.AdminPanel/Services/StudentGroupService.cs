@@ -18,29 +18,31 @@ namespace CharlieBackend.AdminPanel.Services
     {
         private readonly IApiUtil _apiUtil;
         private readonly IMapper _mapper;
-
         private readonly IMentorService _mentorService;
         private readonly IStudentService _studentService;
         private readonly ICourseService _courseService;
+        private readonly StudentGroupsApiEndpoints _studentGroupsApiEndpoints;
 
         public StudentGroupService(IApiUtil apiUtil,
                                    IMapper mapper,
-
                                    IMentorService mentorService,
                                    IStudentService studentService,
-                                   ICourseService courseService)
+                                   ICourseService courseService,
+                                   IOptions<ApplicationSettings> options)
         {
             _apiUtil = apiUtil;
             _mapper = mapper;
-
             _mentorService = mentorService;
             _studentService = studentService;
             _courseService = courseService;
+            _studentGroupsApiEndpoints = options.Value.Urls.ApiEndpoints.StudentGroups;
         }
 
         public async Task<IList<StudentGroupViewModel>> GetAllStudentGroupsAsync()
         {
-            var studentGroupsResponse = await _apiUtil.GetAsync<IList<StudentGroupDto>>($"api/student_groups");
+            var getAllStudentGroupsEndpoint = _studentGroupsApiEndpoints.GetAllStudentGroupsEndpoint;
+
+            var studentGroupsResponse = await _apiUtil.GetAsync<IList<StudentGroupDto>>(getAllStudentGroupsEndpoint);
             var studentGroups = _mapper.Map<IList<StudentGroupViewModel>>(studentGroupsResponse);
             
             var students = await _studentService.GetAllStudentsAsync(); ;
@@ -85,7 +87,10 @@ namespace CharlieBackend.AdminPanel.Services
 
         public async Task<StudentGroupEditViewModel> PrepareStudentGroupUpdateAsync(long id)
         {
-            var studentGroupsTask = _apiUtil.GetAsync<StudentGroupDto>($"api/student_groups/{id}");
+            var getStudentGroupEndpoint = string
+                .Format(_studentGroupsApiEndpoints.GetStudentGroupEndpoint, id);
+
+            var studentGroupsTask = _apiUtil.GetAsync<StudentGroupDto>(getStudentGroupEndpoint);
             var studentsTask = _studentService.GetAllStudentsAsync();
             var mentorsTask = _mentorService.GetAllMentorsAsync();
             var coursesTask = _courseService.GetAllCoursesAsync();
@@ -116,7 +121,11 @@ namespace CharlieBackend.AdminPanel.Services
 
         public async Task<StudentGroupDto> UpdateStudentGroupAsync(long id, StudentGroupDto updateDto)
         {
-            var updateStudentGroupTask = _apiUtil.PutAsync($"api/student_groups/{id}", _mapper.Map<UpdateStudentGroupDto>(updateDto));
+            var updateStudentGroupEndpoint = string
+                .Format(_studentGroupsApiEndpoints.UpdateStudentGroupEndpoint, id);
+
+            var updateStudentGroupTask = _apiUtil.PutAsync(updateStudentGroupEndpoint
+                , _mapper.Map<UpdateStudentGroupDto>(updateDto));
 
 
             await updateStudentGroupTask;
@@ -126,7 +135,9 @@ namespace CharlieBackend.AdminPanel.Services
 
         public async Task<CreateStudentGroupDto> AddStudentGroupAsync(long id, CreateStudentGroupDto addDto)
         {
-            var createStudentGroup = await _apiUtil.CreateAsync($"api/student_groups", addDto);
+            var addStudentGroupEndpoint = _studentGroupsApiEndpoints.AddStudentGroupEndpoint;
+
+            var createStudentGroup = await _apiUtil.CreateAsync(addStudentGroupEndpoint, addDto);
 
             return createStudentGroup;
         }

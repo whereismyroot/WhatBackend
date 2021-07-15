@@ -18,7 +18,6 @@ namespace CharlieBackend.Core.DTO.Schedule
 
         public MonthIndex? Index { get; set; }
 
-        [Range(1, 31)]
         public IList<int> Dates { get; set; }
     }
 }

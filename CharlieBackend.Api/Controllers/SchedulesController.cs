@@ -63,7 +63,7 @@ namespace CharlieBackend.Api.Controllers
         [SwaggerResponse(200, type: typeof(EventOccurrenceDTO))]
         [Authorize(Roles = "Secretary, Admin")]
         [HttpGet("{id}")]
-        public async Task<ActionResult<EventOccurrenceDTO>> GetEventOccuranceByID(long id)
+        public async Task<ActionResult<EventOccurrenceDTO>> GetEventOccuranceById(long id)
         {
             var resSchedule = await _scheduleService.GetEventOccurrenceByIdAsync(id);
 
